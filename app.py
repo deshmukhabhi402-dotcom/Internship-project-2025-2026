@@ -1,29 +1,36 @@
 import streamlit as st
 import pandas as pd
+import matplotlib.pyplot as plt
 
+# -----------------------------
+# Page Title
+# -----------------------------
 st.title("Health Risk Analysis Dashboard")
-st.write("This app displays dataset and model outputs.")
-# Load dataset
+st.write("This app displays dataset and health risk outputs based on life expectancy.")
+
+# -----------------------------
+# Load Dataset
+# -----------------------------
 data = pd.read_csv("UnifiedDataset.csv")
 
+# -----------------------------
+# Dataset Preview
+# -----------------------------
 st.subheader("Dataset Preview")
-st.dataframe(data.head(20))   # shows first 20 rows
+st.dataframe(data.head(20))
+
+# -----------------------------
+# Dataset Information
+# -----------------------------
 st.subheader("Dataset Information")
 st.write("Number of rows:", data.shape[0])
 st.write("Number of columns:", data.shape[1])
 st.write("Column names:")
 st.write(list(data.columns))
-# Load predictions
-y_test = pd.read_csv("y_test.csv")["Life_expectancy"]
-y_pred = pd.read_csv("y_pred.csv")["Predicted_LE"]
 
-output_df = pd.DataFrame({
-    "Actual Life Expectancy": y_test,
-    "Predicted Life Expectancy": y_pred
-})
-
-st.subheader("Model Output: Life Expectancy Prediction")
-st.dataframe(output_df.head(20))
+# -----------------------------
+# Risk Mapping Function (INVERSE)
+# -----------------------------
 def risk_from_le(le):
     if le < 60:
         return "High"
@@ -32,18 +39,28 @@ def risk_from_le(le):
     else:
         return "Low"
 
-output_df["Health Risk Level"] = output_df["Actual Life Expectancy"].apply(risk_from_le)
+# -----------------------------
+# Create Health Risk Column
+# -----------------------------
+data["Health Risk Level"] = data["Life_expectancy"].apply(risk_from_le)
 
+# -----------------------------
+# Show Health Risk Output
+# -----------------------------
 st.subheader("Health Risk Level Output")
-st.dataframe(output_df[["Actual Life Expectancy", "Health Risk Level"]].head(20))
-import matplotlib.pyplot as plt
+st.dataframe(data[["Life_expectancy", "Health Risk Level"]].head(20))
 
-risk_counts = output_df["Health Risk Level"].value_counts()
+# -----------------------------
+# Risk Level Distribution Plot
+# -----------------------------
+st.subheader("Distribution of Health Risk Levels")
+
+risk_counts = data["Health Risk Level"].value_counts()
 
 fig, ax = plt.subplots()
 ax.bar(risk_counts.index, risk_counts.values)
 ax.set_xlabel("Health Risk Level")
-ax.set_ylabel("Count")
+ax.set_ylabel("Number of Countries")
 ax.set_title("Distribution of Health Risk Levels")
 
 st.pyplot(fig)
