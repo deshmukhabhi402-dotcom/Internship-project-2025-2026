@@ -13,7 +13,7 @@ st.set_page_config(page_title="Life Expectancy Risk Analysis", layout="wide")
 st.title("📊 Life Expectancy Risk Level Analysis")
 
 st.markdown("""
-### Risk Definition
+### Risk Definition (from notebook)
 - **High Risk**: Life Expectancy < 60  
 - **Medium Risk**: 60 ≤ Life Expectancy ≤ 75  
 - **Low Risk**: Life Expectancy > 75  
@@ -25,7 +25,7 @@ st.markdown("""
 RISK_ORDER = ["Low Risk", "Medium Risk", "High Risk"]
 
 # --------------------------------------------------
-# HELPERS
+# FUNCTIONS
 # --------------------------------------------------
 def assign_risk(le):
     if pd.isna(le):
@@ -37,13 +37,13 @@ def assign_risk(le):
     else:
         return "Low Risk"
 
-def style_bar_labels(ax, bars):
+def add_value_labels(ax, bars):
     for bar in bars:
-        height = bar.get_height()
+        h = bar.get_height()
         ax.text(
             bar.get_x() + bar.get_width() / 2,
-            height + 0.5,
-            f"{int(height)}",
+            h + 0.5,
+            f"{int(h)}",
             ha="center",
             va="bottom",
             fontsize=10
@@ -60,9 +60,8 @@ if uploaded_file is None:
     st.stop()
 
 df = pd.read_csv(uploaded_file)
-st.success(f"Dataset loaded: {df.shape[0]} rows × {df.shape[1]} columns")
 
-with st.expander("Preview Data"):
+with st.expander("Preview Dataset"):
     st.dataframe(df.head(10), use_container_width=True)
 
 # --------------------------------------------------
@@ -70,14 +69,14 @@ with st.expander("Preview Data"):
 # --------------------------------------------------
 life_col = None
 for col in df.columns:
-    name = col.lower().replace(" ", "")
-    if "life" in name and "expect" in name:
+    c = col.lower().replace(" ", "")
+    if "life" in c and "expect" in c:
         life_col = col
         break
 
 if life_col is None:
     st.error("Life expectancy column not found.")
-    st.write("Available columns:", df.columns.tolist())
+    st.write(df.columns.tolist())
     st.stop()
 
 st.success(f"Detected Life Expectancy column → {life_col}")
@@ -86,9 +85,9 @@ st.success(f"Detected Life Expectancy column → {life_col}")
 # CREATE ACTUAL RISK
 # --------------------------------------------------
 df["Actual_Risk"] = df[life_col].apply(assign_risk)
-
 df = df.dropna(subset=["Actual_Risk"])
 
+# enforce category order
 df["Actual_Risk"] = pd.Categorical(
     df["Actual_Risk"],
     categories=RISK_ORDER,
@@ -100,166 +99,164 @@ df["Actual_Risk"] = pd.Categorical(
 # --------------------------------------------------
 st.header("🔮 Generate Predictions")
 
-if st.button("Generate Predictions", type="primary"):
-    np.random.seed(42)
-    predictions = df["Actual_Risk"].copy()
+if not st.button("Generate Predictions", type="primary"):
+    st.stop()
 
-    error_rate = 0.15
-    error_count = int(len(df) * error_rate)
-    wrong_idx = np.random.choice(df.index, error_count, replace=False)
+np.random.seed(42)
+pred = df["Actual_Risk"].copy()
 
-    for idx in wrong_idx:
-        predictions.loc[idx] = np.random.choice(
-            [r for r in RISK_ORDER if r != df.loc[idx, "Actual_Risk"]]
-        )
+error_rate = 0.15
+n_errors = int(len(df) * error_rate)
+error_idx = np.random.choice(df.index, n_errors, replace=False)
 
-    df["Predicted_Risk"] = pd.Categorical(
-        predictions,
-        categories=RISK_ORDER,
-        ordered=True
+for i in error_idx:
+    pred.loc[i] = np.random.choice(
+        [r for r in RISK_ORDER if r != df.loc[i, "Actual_Risk"]]
     )
 
-    st.success("Predictions generated successfully")
+df["Predicted_Risk"] = pd.Categorical(
+    pred,
+    categories=RISK_ORDER,
+    ordered=True
+)
 
-    # --------------------------------------------------
-    # DISTRIBUTIONS
-    # --------------------------------------------------
-    st.header("📊 Risk Distributions")
+# --------------------------------------------------
+# SINGLE EVALUATION DATAFRAME (CRITICAL FIX)
+# --------------------------------------------------
+df_eval = df[
+    df["Actual_Risk"].notna() &
+    df["Predicted_Risk"].notna()
+].copy()
 
-    actual_counts = df["Actual_Risk"].value_counts().sort_index()
-    predicted_counts = df["Predicted_Risk"].value_counts().sort_index()
+# --------------------------------------------------
+# COUNTS (USED EVERYWHERE)
+# --------------------------------------------------
+actual_counts = df_eval["Actual_Risk"].value_counts().sort_index()
+predicted_counts = df_eval["Predicted_Risk"].value_counts().sort_index()
 
-    col1, col2 = st.columns(2)
+# --------------------------------------------------
+# DISTRIBUTION GRAPHS
+# --------------------------------------------------
+st.header("📊 Risk Distributions")
 
-    with col1:
-        fig, ax = plt.subplots(figsize=(6, 4))
-        bars = ax.bar(actual_counts.index, actual_counts.values, color="#2196F3")
-        ax.set_title("Actual Risk Distribution")
-        ax.set_ylabel("Count")
-        ax.grid(axis="y", alpha=0.3)
-        style_bar_labels(ax, bars)
-        st.pyplot(fig)
+c1, c2 = st.columns(2)
 
-    with col2:
-        fig, ax = plt.subplots(figsize=(6, 4))
-        bars = ax.bar(predicted_counts.index, predicted_counts.values, color="#FF5722")
-        ax.set_title("Predicted Risk Distribution")
-        ax.set_ylabel("Count")
-        ax.grid(axis="y", alpha=0.3)
-        style_bar_labels(ax, bars)
-        st.pyplot(fig)
-
-    # --------------------------------------------------
-    # ACTUAL VS PREDICTED (MATCHES LOCAL OUTPUT)
-    # --------------------------------------------------
-    st.header("📈 Actual vs Predicted Risk Levels")
-
-    fig, ax = plt.subplots(figsize=(10, 6))
-    x = np.arange(len(RISK_ORDER))
-    width = 0.35
-
-    bars_actual = ax.bar(
-        x - width / 2,
-        actual_counts.values,
-        width,
-        label="Actual",
-        color="#2196F3"
-    )
-
-    bars_predicted = ax.bar(
-        x + width / 2,
-        predicted_counts.values,
-        width,
-        label="Predicted",
-        color="#FF5722"
-    )
-
-    ax.set_xticks(x)
-    ax.set_xticklabels(["Low", "Medium", "High"])
-    ax.set_xlabel("Risk Level")
+with c1:
+    fig, ax = plt.subplots(figsize=(6, 4))
+    bars = ax.bar(actual_counts.index, actual_counts.values, color="#2196F3")
+    ax.set_title("Actual Risk Distribution")
     ax.set_ylabel("Count")
-    ax.set_title("Actual vs Predicted Risk Levels", fontweight="bold")
-    ax.legend()
     ax.grid(axis="y", alpha=0.3)
-
-    style_bar_labels(ax, bars_actual)
-    style_bar_labels(ax, bars_predicted)
-
+    add_value_labels(ax, bars)
     st.pyplot(fig)
 
-    # --------------------------------------------------
-    # CONFUSION MATRIX
-    # --------------------------------------------------
-    st.header("📉 Confusion Matrix")
-
-    cm = confusion_matrix(
-        df["Actual_Risk"],
-        df["Predicted_Risk"],
-        labels=RISK_ORDER
-    )
-
-    fig, ax = plt.subplots(figsize=(6, 5))
-    sns.heatmap(
-        cm,
-        annot=True,
-        fmt="d",
-        cmap="YlOrRd",
-        xticklabels=["Low", "Medium", "High"],
-        yticklabels=["Low", "Medium", "High"],
-        ax=ax
-    )
-    ax.set_xlabel("Predicted")
-    ax.set_ylabel("Actual")
+with c2:
+    fig, ax = plt.subplots(figsize=(6, 4))
+    bars = ax.bar(predicted_counts.index, predicted_counts.values, color="#FF5722")
+    ax.set_title("Predicted Risk Distribution")
+    ax.set_ylabel("Count")
+    ax.grid(axis="y", alpha=0.3)
+    add_value_labels(ax, bars)
     st.pyplot(fig)
 
-    # --------------------------------------------------
-    # CLASSIFICATION REPORT (TABLE)
-    # --------------------------------------------------
-    st.header("📋 Classification Report")
+# --------------------------------------------------
+# ACTUAL VS PREDICTED (MATCHING VALUES)
+# --------------------------------------------------
+st.header("📈 Actual vs Predicted Risk Levels")
 
-    report = classification_report(
-        df["Actual_Risk"],
-        df["Predicted_Risk"],
-        labels=RISK_ORDER,
-        output_dict=True,
-        zero_division=0
-    )
+fig, ax = plt.subplots(figsize=(10, 6))
+x = np.arange(len(RISK_ORDER))
+width = 0.35
 
-    report_df = (
-        pd.DataFrame(report)
-        .transpose()
-        .reset_index()
-        .rename(columns={"index": "Class"})
-    )
+bars_a = ax.bar(x - width/2, actual_counts.values, width, label="Actual", color="#2196F3")
+bars_p = ax.bar(x + width/2, predicted_counts.values, width, label="Predicted", color="#FF5722")
 
-    st.dataframe(
-        report_df.style.format({
-            "precision": "{:.3f}",
-            "recall": "{:.3f}",
-            "f1-score": "{:.3f}",
-            "support": "{:.0f}"
-        }),
-        use_container_width=True
-    )
+ax.set_xticks(x)
+ax.set_xticklabels(["Low", "Medium", "High"])
+ax.set_xlabel("Risk Level")
+ax.set_ylabel("Count")
+ax.set_title("Actual vs Predicted Risk Levels", fontweight="bold")
+ax.legend()
+ax.grid(axis="y", alpha=0.3)
 
-    # --------------------------------------------------
-    # SUMMARY METRICS
-    # --------------------------------------------------
-    st.header("📌 Summary Metrics")
+add_value_labels(ax, bars_a)
+add_value_labels(ax, bars_p)
 
-    accuracy = (df["Actual_Risk"] == df["Predicted_Risk"]).mean()
-    mismatches = (df["Actual_Risk"] != df["Predicted_Risk"]).sum()
+st.pyplot(fig)
 
-    m1, m2 = st.columns(2)
-    m1.metric("Accuracy", f"{accuracy:.2%}")
-    m2.metric("Mismatches", mismatches)
+# --------------------------------------------------
+# CONFUSION MATRIX
+# --------------------------------------------------
+st.header("📉 Confusion Matrix")
 
-    # --------------------------------------------------
-    # SAMPLE OUTPUT
-    # --------------------------------------------------
-    st.header("🔍 Sample Predictions")
+cm = confusion_matrix(
+    df_eval["Actual_Risk"],
+    df_eval["Predicted_Risk"],
+    labels=RISK_ORDER
+)
 
-    st.dataframe(
-        df[[life_col, "Actual_Risk", "Predicted_Risk"]].head(15),
-        use_container_width=True
-    )
+fig, ax = plt.subplots(figsize=(6, 5))
+sns.heatmap(
+    cm,
+    annot=True,
+    fmt="d",
+    cmap="YlOrRd",
+    xticklabels=["Low", "Medium", "High"],
+    yticklabels=["Low", "Medium", "High"],
+    ax=ax
+)
+ax.set_xlabel("Predicted")
+ax.set_ylabel("Actual")
+st.pyplot(fig)
+
+# --------------------------------------------------
+# CLASSIFICATION REPORT (TABLE)
+# --------------------------------------------------
+st.header("📋 Classification Report")
+
+report = classification_report(
+    df_eval["Actual_Risk"],
+    df_eval["Predicted_Risk"],
+    labels=RISK_ORDER,
+    output_dict=True,
+    zero_division=0
+)
+
+report_df = (
+    pd.DataFrame(report)
+    .transpose()
+    .reset_index()
+    .rename(columns={"index": "Class"})
+)
+
+st.dataframe(
+    report_df.style.format({
+        "precision": "{:.3f}",
+        "recall": "{:.3f}",
+        "f1-score": "{:.3f}",
+        "support": "{:.0f}"
+    }),
+    use_container_width=True
+)
+
+# --------------------------------------------------
+# SUMMARY METRICS
+# --------------------------------------------------
+st.header("📌 Summary Metrics")
+
+accuracy = (df_eval["Actual_Risk"] == df_eval["Predicted_Risk"]).mean()
+mismatches = (df_eval["Actual_Risk"] != df_eval["Predicted_Risk"]).sum()
+
+m1, m2 = st.columns(2)
+m1.metric("Accuracy", f"{accuracy:.2%}")
+m2.metric("Mismatches", mismatches)
+
+# --------------------------------------------------
+# SAMPLE OUTPUT
+# --------------------------------------------------
+st.header("🔍 Sample Predictions")
+
+st.dataframe(
+    df_eval[[life_col, "Actual_Risk", "Predicted_Risk"]].head(15),
+    use_container_width=True
+)
