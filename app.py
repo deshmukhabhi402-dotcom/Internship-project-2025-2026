@@ -188,7 +188,7 @@ if uploaded_file is not None:
                         
                         with tab2:
                             # BAR GRAPH - Risk Distribution (ACTUAL ONLY)
-                            st.subheader("Actual Risk Distribution")
+                            st.subheader("Risk Distribution")
                             
                             # Create two columns for different visualizations
                             col_vis1, col_vis2 = st.columns(2)
@@ -207,7 +207,7 @@ if uploaded_file is not None:
                                 # Customize the chart
                                 ax.set_xlabel('Risk Level', fontsize=12)
                                 ax.set_ylabel('Count', fontsize=12)
-                                ax.set_title('Actual Risk Distribution', fontsize=14, fontweight='bold')
+                                ax.set_title('Risk Distribution', fontsize=14, fontweight='bold')
                                 ax.set_xticklabels(['High\n(<60 years)', 'Medium\n(60-75 years)', 'Low\n(>75 years)'])
                                 ax.grid(True, alpha=0.3, axis='y')
                                 
@@ -451,6 +451,6 @@ else:
     3. Generates sample predictions
     4. Shows visualizations:
        - **Tab 1**: Predicted vs Actual comparison
-       - **Tab 2**: Actual Risk Distribution (bar and pie charts)
+       - **Tab 2**: Risk Distribution (bar and pie charts)
        - **Tab 3**: Classification Report with metrics
     """)
