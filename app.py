@@ -4,450 +4,402 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score, classification_report, confusion_matrix
 import warnings
 warnings.filterwarnings('ignore')
 
 # Page setup
 st.set_page_config(page_title="Life Expectancy Analysis", layout="wide")
-st.title("📊 Life Expectancy Prediction Analysis")
+st.title("📊 Life Expectancy Prediction & Risk Analysis")
 
 st.markdown("""
-### This app visualizes your notebook's regression results
-**Your notebook shows:** Actual vs Predicted Life Expectancy values (not just risk categories)
+### This app analyzes both Regression and Classification results from your notebook
+**Your notebook shows:**
+1. **Regression**: Predicting Life Expectancy values
+2. **Classification**: Categorizing into Health Risk Levels (High, Medium, Low)
 """)
 
-# 1. UPLOAD YOUR REGRESSION RESULTS
-st.header("📁 Upload Your Regression Results CSV")
-uploaded_file = st.file_uploader("Upload CSV with actual and predicted life expectancy", type=['csv'])
+# 1. UPLOAD YOUR DATASET
+st.header("📁 Upload Your Dataset")
+uploaded_file = st.file_uploader("Upload your dataset CSV (like UnifiedDataset.csv)", type=['csv'])
 
 if uploaded_file is not None:
     try:
         # Load data
         df = pd.read_csv(uploaded_file)
         
-        st.success(f"✅ File loaded: {df.shape[0]} rows, {df.shape[1]} columns")
-        
-        # Show columns
-        st.write("**Columns in your file:**")
-        st.write(", ".join(df.columns.tolist()))
+        st.success(f"✅ Dataset loaded: {df.shape[0]} rows, {df.shape[1]} columns")
         
         # Show preview
-        with st.expander("👀 Preview your data"):
+        with st.expander("👀 Preview your dataset"):
             st.dataframe(df.head(), use_container_width=True)
+            st.write(f"**Dataset Info:** {df.shape[0]} samples, {df.shape[1]} features")
         
-        # 2. SELECT COLUMNS
-        st.header("🔍 Select Your Columns")
+        # 2. DATA PREPROCESSING (Matching your notebook)
+        st.header("🔧 Data Preprocessing")
         
-        col1, col2 = st.columns(2)
+        with st.expander("Data Processing Steps (from your notebook)"):
+            st.markdown("""
+            **From your notebook:**
+            1. Fill missing numerical values with median
+            2. Fill missing categorical values with mode
+            3. Encode categorical columns
+            4. Create Health Risk Levels:
+               - High Risk: Life Expectancy < 60
+               - Medium Risk: Life Expectancy 60-70
+               - Low Risk: Life Expectancy > 70
+            """)
         
-        with col1:
-            # Find actual life expectancy column
-            actual_cols = [col for col in df.columns if any(word in col.lower() 
-                          for word in ['actual', 'true', 'test', 'y_test', 'life'])]
-            if actual_cols:
-                actual_col = st.selectbox("Actual Life Expectancy:", 
-                                         df.columns, 
-                                         index=df.columns.get_loc(actual_cols[0]))
+        # Check if Life Expectancy column exists
+        if 'Life Expectancy' not in df.columns:
+            # Try to find similar column names
+            life_cols = [col for col in df.columns if 'life' in col.lower() or 'expect' in col.lower()]
+            if life_cols:
+                df = df.rename(columns={life_cols[0]: 'Life Expectancy'})
+                st.info(f"Renamed '{life_cols[0]}' to 'Life Expectancy'")
             else:
-                actual_col = st.selectbox("Actual Life Expectancy:", df.columns)
+                st.error("❌ Could not find Life Expectancy column in your dataset")
+                st.stop()
         
-        with col2:
-            # Find predicted life expectancy column
-            pred_cols = [col for col in df.columns if any(word in col.lower() 
-                         for word in ['predicted', 'pred', 'y_pred', 'predict'])]
-            if pred_cols:
-                predicted_col = st.selectbox("Predicted Life Expectancy:", 
-                                            df.columns, 
-                                            index=df.columns.get_loc(pred_cols[0]))
+        # Create Health Risk Level (same as notebook)
+        def risk_level(le):
+            if pd.isna(le):
+                return np.nan
+            if le < 60:
+                return "High"
+            elif le < 70:
+                return "Medium"
             else:
-                predicted_col = st.selectbox("Predicted Life Expectancy:", df.columns)
+                return "Low"
         
-        # Check if columns are numeric
-        actual_is_numeric = pd.api.types.is_numeric_dtype(df[actual_col])
-        predicted_is_numeric = pd.api.types.is_numeric_dtype(df[predicted_col])
+        df["Health_Risk_Level"] = df["Life Expectancy"].apply(risk_level)
         
-        if not (actual_is_numeric and predicted_is_numeric):
-            st.error("❌ Please select numeric columns for life expectancy values")
-        else:
-            # 3. PROCESS DATA
-            if st.button("📊 Generate Visualizations", type="primary"):
-                # Create results dataframe
-                results_df = pd.DataFrame({
-                    'Actual': df[actual_col],
-                    'Predicted': df[predicted_col]
+        # Show risk distribution
+        risk_counts = df["Health_Risk_Level"].value_counts()
+        
+        col_stat1, col_stat2, col_stat3, col_stat4 = st.columns(4)
+        with col_stat1:
+            st.metric("Total Samples", df.shape[0])
+        with col_stat2:
+            if 'High' in risk_counts:
+                st.metric("High Risk", risk_counts['High'])
+        with col_stat3:
+            if 'Medium' in risk_counts:
+                st.metric("Medium Risk", risk_counts['Medium'])
+        with col_stat4:
+            if 'Low' in risk_counts:
+                st.metric("Low Risk", risk_counts['Low'])
+        
+        # 3. VISUALIZE DISTRIBUTIONS
+        st.header("📊 Dataset Analysis")
+        
+        # Create tabs for different analyses
+        tab1, tab2, tab3, tab4 = st.tabs([
+            "Life Expectancy Distribution", 
+            "Risk Level Analysis", 
+            "Feature Correlation",
+            "Model Simulation"
+        ])
+        
+        with tab1:
+            # Life Expectancy Distribution
+            st.subheader("Life Expectancy Distribution")
+            
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+            
+            # Histogram
+            ax1.hist(df['Life Expectancy'].dropna(), bins=30, edgecolor='black', alpha=0.7, color='skyblue')
+            ax1.axvline(x=60, color='red', linestyle='--', alpha=0.5, label='High/Medium Threshold')
+            ax1.axvline(x=70, color='orange', linestyle='--', alpha=0.5, label='Medium/Low Threshold')
+            ax1.set_xlabel('Life Expectancy (years)')
+            ax1.set_ylabel('Frequency')
+            ax1.set_title('Distribution of Life Expectancy')
+            ax1.legend()
+            ax1.grid(True, alpha=0.3)
+            
+            # Box plot
+            ax2.boxplot(df['Life Expectancy'].dropna())
+            ax2.set_ylabel('Life Expectancy (years)')
+            ax2.set_title('Box Plot of Life Expectancy')
+            ax2.grid(True, alpha=0.3)
+            
+            # Add statistics
+            stats_text = f"""
+            Statistics:
+            Mean: {df['Life Expectancy'].mean():.2f}
+            Median: {df['Life Expectancy'].median():.2f}
+            Std Dev: {df['Life Expectancy'].std():.2f}
+            Min: {df['Life Expectancy'].min():.2f}
+            Max: {df['Life Expectancy'].max():.2f}
+            """
+            ax1.text(0.02, 0.98, stats_text, transform=ax1.transAxes, 
+                    fontsize=9, verticalalignment='top', 
+                    bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+            
+            plt.tight_layout()
+            st.pyplot(fig)
+            
+            # Statistics table
+            st.write("**Life Expectancy Statistics by Risk Level:**")
+            if 'Health_Risk_Level' in df.columns:
+                stats_by_risk = df.groupby('Health_Risk_Level')['Life Expectancy'].agg([
+                    'count', 'mean', 'std', 'min', 'max', 'median'
+                ]).round(2)
+                st.dataframe(stats_by_risk, use_container_width=True)
+        
+        with tab2:
+            # Risk Level Analysis
+            st.subheader("Health Risk Level Analysis")
+            
+            col_risk1, col_risk2 = st.columns(2)
+            
+            with col_risk1:
+                # Pie chart
+                fig, ax = plt.subplots(figsize=(8, 8))
+                
+                colors = {'High': '#FF6B6B', 'Medium': '#FFD93D', 'Low': '#6BCF7F'}
+                risk_colors = [colors.get(risk, 'gray') for risk in risk_counts.index]
+                
+                wedges, texts, autotexts = ax.pie(risk_counts.values, 
+                                                 labels=risk_counts.index, 
+                                                 colors=risk_colors,
+                                                 autopct='%1.1f%%', 
+                                                 startangle=90,
+                                                 explode=[0.05, 0.05, 0.05] if len(risk_counts) == 3 else [0.05]*len(risk_counts))
+                
+                ax.set_title('Distribution of Health Risk Levels', fontsize=14, fontweight='bold')
+                
+                # Make percentages bold
+                for autotext in autotexts:
+                    autotext.set_color('white')
+                    autotext.set_fontweight('bold')
+                
+                st.pyplot(fig)
+            
+            with col_risk2:
+                # Bar chart
+                fig, ax = plt.subplots(figsize=(8, 8))
+                
+                bars = ax.bar(risk_counts.index, risk_counts.values, 
+                             color=[colors.get(risk, 'gray') for risk in risk_counts.index],
+                             alpha=0.8, edgecolor='black')
+                
+                ax.set_xlabel('Health Risk Level', fontsize=12)
+                ax.set_ylabel('Number of Samples', fontsize=12)
+                ax.set_title('Health Risk Level Counts', fontsize=14, fontweight='bold')
+                ax.grid(True, alpha=0.3, axis='y')
+                
+                # Add value labels on bars
+                for bar in bars:
+                    height = bar.get_height()
+                    ax.text(bar.get_x() + bar.get_width()/2, height + 0.5,
+                           f'{int(height)}', ha='center', fontweight='bold', fontsize=11)
+                
+                st.pyplot(fig)
+            
+            # Show sample data for each risk level
+            st.write("**Sample Data by Risk Level:**")
+            sample_size = st.slider("Samples per risk level:", 1, 10, 3)
+            
+            for risk_level in ['High', 'Medium', 'Low']:
+                if risk_level in df['Health_Risk_Level'].values:
+                    with st.expander(f"{risk_level} Risk Samples"):
+                        samples = df[df['Health_Risk_Level'] == risk_level].head(sample_size)
+                        # Select only relevant columns
+                        display_cols = ['Life Expectancy', 'Health_Risk_Level']
+                        # Add some additional columns if they exist
+                        additional_cols = ['Country', 'Year', 'Gender', 'Infant Mortality Rate']
+                        for col in additional_cols:
+                            if col in df.columns:
+                                display_cols.append(col)
+                        
+                        st.dataframe(samples[display_cols], use_container_width=True)
+        
+        with tab3:
+            # Feature Correlation
+            st.subheader("Feature Correlation with Life Expectancy")
+            
+            # Select numerical columns
+            num_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+            
+            if len(num_cols) > 1 and 'Life Expectancy' in num_cols:
+                # Calculate correlation with Life Expectancy
+                correlations = df[num_cols].corr()['Life Expectancy'].sort_values(ascending=False)
+                
+                # Remove Life Expectancy itself
+                correlations = correlations[correlations.index != 'Life Expectancy']
+                
+                # Take top and bottom correlations
+                top_n = st.slider("Number of features to show:", 5, 20, 10)
+                top_features = pd.concat([correlations.head(top_n//2), correlations.tail(top_n//2)])
+                
+                fig, ax = plt.subplots(figsize=(10, 8))
+                
+                colors = ['green' if x > 0 else 'red' for x in top_features.values]
+                bars = ax.barh(range(len(top_features)), top_features.values, color=colors, alpha=0.7)
+                
+                ax.set_yticks(range(len(top_features)))
+                ax.set_yticklabels(top_features.index)
+                ax.set_xlabel('Correlation with Life Expectancy')
+                ax.set_title(f'Top {top_n} Most Correlated Features', fontsize=14, fontweight='bold')
+                ax.grid(True, alpha=0.3, axis='x')
+                
+                # Add correlation values on bars
+                for i, (bar, val) in enumerate(zip(bars, top_features.values)):
+                    ax.text(val + (0.01 if val >= 0 else -0.03), bar.get_y() + bar.get_height()/2,
+                           f'{val:.3f}', va='center', fontsize=9,
+                           color='black' if abs(val) > 0.1 else 'gray')
+                
+                plt.tight_layout()
+                st.pyplot(fig)
+                
+                # Show correlation table
+                st.write("**Correlation Details:**")
+                corr_table = pd.DataFrame({
+                    'Feature': top_features.index,
+                    'Correlation': top_features.values,
+                    'Strength': ['Strong' if abs(x) > 0.5 else 'Moderate' if abs(x) > 0.3 else 'Weak' for x in top_features.values],
+                    'Direction': ['Positive' if x > 0 else 'Negative' for x in top_features.values]
                 })
-                
-                # Add Risk Categories based on actual life expectancy
-                results_df['Actual_Risk'] = pd.cut(
-                    results_df['Actual'],
-                    bins=[0, 60, 75, 100],
-                    labels=['High Risk', 'Medium Risk', 'Low Risk']
-                )
-                
-                # Add Risk Categories based on predicted life expectancy
-                results_df['Predicted_Risk'] = pd.cut(
-                    results_df['Predicted'],
-                    bins=[0, 60, 75, 100],
-                    labels=['High Risk', 'Medium Risk', 'Low Risk']
-                )
-                
-                # Calculate regression metrics
-                mse = mean_squared_error(results_df['Actual'], results_df['Predicted'])
-                rmse = np.sqrt(mse)
-                mae = mean_absolute_error(results_df['Actual'], results_df['Predicted'])
-                r2 = r2_score(results_df['Actual'], results_df['Predicted'])
-                
-                # Calculate classification accuracy for risk categories
-                risk_accuracy = (results_df['Actual_Risk'] == results_df['Predicted_Risk']).mean()
-                
-                # Display metrics
-                st.success("✅ Analysis complete!")
-                
-                col_met1, col_met2, col_met3, col_met4 = st.columns(4)
-                with col_met1:
-                    st.metric("R² Score", f"{r2:.3f}")
-                with col_met2:
-                    st.metric("RMSE", f"{rmse:.2f}")
-                with col_met3:
-                    st.metric("MAE", f"{mae:.2f}")
-                with col_met4:
-                    st.metric("Risk Accuracy", f"{risk_accuracy:.1%}")
-                
-                # 4. VISUALIZATIONS
-                st.header("📈 Visualizations")
-                
-                # Create tabs
-                tab1, tab2, tab3, tab4 = st.tabs([
-                    "Actual vs Predicted", 
-                    "Risk Distribution", 
-                    "Regression Plot",
-                    "Error Analysis"
-                ])
-                
-                with tab1:
-                    # BAR GRAPH - Actual vs Predicted Life Expectancy (Binned)
-                    st.subheader("Actual vs Predicted Life Expectancy Distribution")
-                    
-                    # Bin the life expectancy values for visualization
-                    bins = np.arange(40, 91, 5)  # 40 to 90 in steps of 5
-                    actual_binned = pd.cut(results_df['Actual'], bins=bins, include_lowest=True)
-                    predicted_binned = pd.cut(results_df['Predicted'], bins=bins, include_lowest=True)
-                    
-                    # Get counts
-                    actual_counts = actual_binned.value_counts().sort_index()
-                    predicted_counts = predicted_binned.value_counts().sort_index()
-                    
-                    # Create bar chart
-                    fig, ax = plt.subplots(figsize=(12, 6))
-                    x = np.arange(len(actual_counts))
-                    width = 0.35
-                    
-                    ax.bar(x - width/2, actual_counts.values, width, 
-                          label='Actual', color='blue', alpha=0.7)
-                    ax.bar(x + width/2, predicted_counts.values, width, 
-                          label='Predicted', color='orange', alpha=0.7)
-                    
-                    ax.set_xlabel('Life Expectancy Range (years)', fontsize=12)
-                    ax.set_ylabel('Number of Samples', fontsize=12)
-                    ax.set_title('Distribution of Actual vs Predicted Life Expectancy', fontsize=14, fontweight='bold')
-                    ax.set_xticks(x)
-                    
-                    # Format x-tick labels
-                    labels = [f"{int(interval.left)}-{int(interval.right)}" for interval in actual_counts.index]
-                    ax.set_xticklabels(labels, rotation=45, ha='right')
-                    
-                    ax.legend()
-                    ax.grid(True, alpha=0.3, axis='y')
-                    
-                    # Add value labels on top bars
-                    for i, (act, pred) in enumerate(zip(actual_counts.values, predicted_counts.values)):
-                        if act > 0:
-                            ax.text(i - width/2, act + 0.5, str(int(act)), ha='center', fontsize=8)
-                        if pred > 0:
-                            ax.text(i + width/2, pred + 0.5, str(int(pred)), ha='center', fontsize=8)
-                    
-                    plt.tight_layout()
-                    st.pyplot(fig)
-                    
-                    st.info("**Interpretation:** Shows how actual and predicted life expectancy values are distributed across different ranges.")
-                
-                with tab2:
-                    # BAR GRAPH - Risk Level Distribution
-                    st.subheader("Health Risk Level Distribution")
-                    
-                    # Get counts for risk categories
-                    actual_risk_counts = results_df['Actual_Risk'].value_counts()
-                    predicted_risk_counts = results_df['Predicted_Risk'].value_counts()
-                    
-                    # Ensure all categories are present
-                    categories = ['High Risk', 'Medium Risk', 'Low Risk']
-                    actual_risk_counts = actual_risk_counts.reindex(categories, fill_value=0)
-                    predicted_risk_counts = predicted_risk_counts.reindex(categories, fill_value=0)
-                    
-                    # Create two visualizations
-                    col_risk1, col_risk2 = st.columns(2)
-                    
-                    with col_risk1:
-                        # Bar chart comparing actual vs predicted risk
-                        fig, ax = plt.subplots(figsize=(8, 6))
-                        x = np.arange(len(categories))
-                        width = 0.35
-                        
-                        ax.bar(x - width/2, actual_risk_counts.values, width, 
-                              label='Actual Risk', color='blue', alpha=0.7)
-                        ax.bar(x + width/2, predicted_risk_counts.values, width, 
-                              label='Predicted Risk', color='orange', alpha=0.7)
-                        
-                        ax.set_xlabel('Health Risk Level', fontsize=12)
-                        ax.set_ylabel('Number of Samples', fontsize=12)
-                        ax.set_title('Actual vs Predicted Health Risk Levels', fontsize=14, fontweight='bold')
-                        ax.set_xticks(x)
-                        ax.set_xticklabels(['Low', 'Medium', 'High'])
-                        ax.legend()
-                        ax.grid(True, alpha=0.3, axis='y')
-                        
-                        # Add value labels
-                        for i, (act, pred) in enumerate(zip(actual_risk_counts.values, predicted_risk_counts.values)):
-                            ax.text(i - width/2, act + 0.5, str(int(act)), ha='center', fontsize=10)
-                            ax.text(i + width/2, pred + 0.5, str(int(pred)), ha='center', fontsize=10)
-                        
-                        st.pyplot(fig)
-                    
-                    with col_risk2:
-                        # Actual risk distribution only
-                        fig, ax = plt.subplots(figsize=(8, 6))
-                        
-                        colors = ['#FF6B6B', '#FFD93D', '#6BCF7F']  # Red, Yellow, Green
-                        bars = ax.bar(categories, actual_risk_counts.values, 
-                                     color=colors, alpha=0.8, edgecolor='black')
-                        
-                        ax.set_xlabel('Health Risk Level', fontsize=12)
-                        ax.set_ylabel('Number of Samples', fontsize=12)
-                        ax.set_title('Distribution of Health Risk Levels', fontsize=14, fontweight='bold')
-                        ax.set_xticklabels(['Low', 'Medium', 'High'])
-                        ax.grid(True, alpha=0.3, axis='y')
-                        
-                        # Add value labels
-                        for bar in bars:
-                            height = bar.get_height()
-                            ax.text(bar.get_x() + bar.get_width()/2, height + 0.5,
-                                   f'{int(height)}', ha='center', fontweight='bold')
-                        
-                        st.pyplot(fig)
-                    
-                    # Show risk classification summary
-                    st.write("**Risk Classification Summary:**")
-                    risk_summary = pd.DataFrame({
-                        'Risk Level': categories,
-                        'Actual Count': actual_risk_counts.values,
-                        'Predicted Count': predicted_risk_counts.values,
-                        'Correct Predictions': [(results_df[(results_df['Actual_Risk'] == cat) & 
-                                                          (results_df['Predicted_Risk'] == cat)]).shape[0] 
-                                              for cat in categories]
-                    })
-                    
-                    risk_summary['Accuracy'] = risk_summary['Correct Predictions'] / risk_summary['Actual Count']
-                    risk_summary['Accuracy'] = risk_summary['Accuracy'].fillna(0)
-                    
-                    st.dataframe(risk_summary.style.format({
-                        'Accuracy': '{:.1%}'
-                    }), use_container_width=True)
-                
-                with tab3:
-                    # SCATTER PLOT - Actual vs Predicted
-                    st.subheader("Regression: Actual vs Predicted Life Expectancy")
-                    
-                    fig, ax = plt.subplots(figsize=(10, 8))
-                    
-                    # Create scatter plot
-                    scatter = ax.scatter(results_df['Actual'], results_df['Predicted'], 
-                                        alpha=0.6, s=50, c='steelblue', edgecolors='white', linewidth=0.5)
-                    
-                    # Add perfect prediction line
-                    min_val = min(results_df['Actual'].min(), results_df['Predicted'].min())
-                    max_val = max(results_df['Actual'].max(), results_df['Predicted'].max())
-                    ax.plot([min_val, max_val], [min_val, max_val], 
-                           'r--', label='Perfect Prediction', linewidth=2)
-                    
-                    # Add regression line
-                    z = np.polyfit(results_df['Actual'], results_df['Predicted'], 1)
-                    p = np.poly1d(z)
-                    ax.plot(results_df['Actual'], p(results_df['Actual']), 
-                           'g-', label=f'Regression Line (R²={r2:.3f})', alpha=0.8)
-                    
-                    ax.set_xlabel('Actual Life Expectancy (years)', fontsize=12)
-                    ax.set_ylabel('Predicted Life Expectancy (years)', fontsize=12)
-                    ax.set_title('Actual vs Predicted Life Expectancy', fontsize=14, fontweight='bold')
-                    ax.legend()
-                    ax.grid(True, alpha=0.3)
-                    
-                    # Set equal aspect ratio
-                    ax.set_aspect('equal', adjustable='box')
-                    
-                    # Add text with metrics
-                    textstr = f'R² = {r2:.3f}\nRMSE = {rmse:.2f}\nMAE = {mae:.2f}'
-                    props = dict(boxstyle='round', facecolor='wheat', alpha=0.8)
-                    ax.text(0.05, 0.95, textstr, transform=ax.transAxes, fontsize=11,
-                           verticalalignment='top', bbox=props)
-                    
-                    plt.tight_layout()
-                    st.pyplot(fig)
-                    
-                    # Residual plot
-                    st.write("**Residual Plot:**")
-                    results_df['Residuals'] = results_df['Predicted'] - results_df['Actual']
-                    
-                    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
-                    
-                    # Residuals vs Actual
-                    ax1.scatter(results_df['Actual'], results_df['Residuals'], alpha=0.6, s=40)
-                    ax1.axhline(y=0, color='r', linestyle='--', alpha=0.5)
-                    ax1.set_xlabel('Actual Life Expectancy')
-                    ax1.set_ylabel('Residuals (Predicted - Actual)')
-                    ax1.set_title('Residuals vs Actual')
-                    ax1.grid(True, alpha=0.3)
-                    
-                    # Residuals histogram
-                    ax2.hist(results_df['Residuals'], bins=30, edgecolor='black', alpha=0.7)
-                    ax2.axvline(x=0, color='r', linestyle='--', alpha=0.5)
-                    ax2.set_xlabel('Residuals')
-                    ax2.set_ylabel('Frequency')
-                    ax2.set_title('Distribution of Residuals')
-                    ax2.grid(True, alpha=0.3)
-                    
-                    plt.tight_layout()
-                    st.pyplot(fig)
-                
-                with tab4:
-                    # ERROR ANALYSIS
-                    st.subheader("Error Analysis")
-                    
-                    # Calculate absolute errors
-                    results_df['Absolute_Error'] = np.abs(results_df['Predicted'] - results_df['Actual'])
-                    
-                    # Create error analysis visualizations
-                    col_err1, col_err2 = st.columns(2)
-                    
-                    with col_err1:
-                        # Error by actual life expectancy
-                        fig, ax = plt.subplots(figsize=(8, 6))
-                        
-                        # Bin actual values and calculate mean error per bin
-                        results_df['Actual_Bin'] = pd.cut(results_df['Actual'], bins=10)
-                        error_by_bin = results_df.groupby('Actual_Bin')['Absolute_Error'].mean()
-                        
-                        # Plot
-                        x_pos = np.arange(len(error_by_bin))
-                        bars = ax.bar(x_pos, error_by_bin.values, alpha=0.7)
-                        
-                        ax.set_xlabel('Actual Life Expectancy Range', fontsize=11)
-                        ax.set_ylabel('Mean Absolute Error', fontsize=11)
-                        ax.set_title('Prediction Error by Life Expectancy Range', fontsize=13)
-                        ax.set_xticks(x_pos)
-                        
-                        # Format x-tick labels
-                        labels = []
-                        for interval in error_by_bin.index:
-                            left = int(interval.left)
-                            right = int(interval.right)
-                            labels.append(f"{left}-{right}")
-                        ax.set_xticklabels(labels, rotation=45, ha='right')
-                        
-                        # Add value labels
-                        for bar, val in zip(bars, error_by_bin.values):
-                            height = bar.get_height()
-                            ax.text(bar.get_x() + bar.get_width()/2, height + 0.05,
-                                   f'{height:.1f}', ha='center', fontsize=9)
-                        
-                        plt.tight_layout()
-                        st.pyplot(fig)
-                    
-                    with col_err2:
-                        # Error distribution
-                        fig, ax = plt.subplots(figsize=(8, 6))
-                        
-                        # Plot error distribution
-                        ax.hist(results_df['Absolute_Error'], bins=30, 
-                               edgecolor='black', alpha=0.7, color='steelblue')
-                        
-                        # Add mean line
-                        mean_error = results_df['Absolute_Error'].mean()
-                        ax.axvline(x=mean_error, color='red', linestyle='--', 
-                                  label=f'Mean Error: {mean_error:.2f}')
-                        
-                        ax.set_xlabel('Absolute Prediction Error (years)', fontsize=11)
-                        ax.set_ylabel('Frequency', fontsize=11)
-                        ax.set_title('Distribution of Prediction Errors', fontsize=13)
-                        ax.legend()
-                        ax.grid(True, alpha=0.3)
-                        
-                        plt.tight_layout()
-                        st.pyplot(fig)
-                    
-                    # Summary statistics
-                    st.write("**Error Statistics:**")
-                    error_stats = pd.DataFrame({
-                        'Statistic': ['Mean Absolute Error', 'Root Mean Square Error', 
-                                     'Max Absolute Error', 'Min Absolute Error',
-                                     'Error Std Dev', 'Median Absolute Error'],
-                        'Value': [
-                            results_df['Absolute_Error'].mean(),
-                            rmse,
-                            results_df['Absolute_Error'].max(),
-                            results_df['Absolute_Error'].min(),
-                            results_df['Absolute_Error'].std(),
-                            results_df['Absolute_Error'].median()
-                        ]
-                    })
-                    
-                    error_stats['Value'] = error_stats['Value'].round(3)
-                    st.dataframe(error_stats, use_container_width=True)
-                    
-                    # Show samples with largest errors
-                    st.write("**Samples with Largest Prediction Errors:**")
-                    largest_errors = results_df.nlargest(10, 'Absolute_Error')[['Actual', 'Predicted', 'Absolute_Error']]
-                    largest_errors = largest_errors.round(2)
-                    st.dataframe(largest_errors, use_container_width=True)
+                st.dataframe(corr_table.style.format({'Correlation': '{:.3f}'}), 
+                           use_container_width=True)
+            else:
+                st.warning("Not enough numerical columns for correlation analysis")
+        
+        with tab4:
+            # Model Simulation
+            st.subheader("Simulate Model Predictions")
+            
+            st.markdown("""
+            **Simulating your notebook's Random Forest predictions:**
+            This section simulates what your model might predict based on the dataset.
+            """)
+            
+            # Simulate predictions (for demo purposes)
+            np.random.seed(42)
+            
+            # Create simulated predictions with some error
+            actual_values = df['Life Expectancy'].dropna().values
+            
+            # Add random error to simulate predictions
+            error_std = st.slider("Simulated prediction error (std dev):", 0.1, 5.0, 1.5)
+            simulated_predictions = actual_values + np.random.normal(0, error_std, len(actual_values))
+            
+            # Clip predictions to realistic range
+            simulated_predictions = np.clip(simulated_predictions, 40, 90)
+            
+            # Calculate metrics
+            mse = mean_squared_error(actual_values, simulated_predictions)
+            rmse = np.sqrt(mse)
+            mae = mean_absolute_error(actual_values, simulated_predictions)
+            r2 = r2_score(actual_values, simulated_predictions)
+            
+            # Create simulated risk predictions
+            actual_risk = [risk_level(x) for x in actual_values]
+            predicted_risk = [risk_level(x) for x in simulated_predictions]
+            
+            # Calculate risk accuracy
+            risk_accuracy = sum(1 for a, p in zip(actual_risk, predicted_risk) if a == p) / len(actual_risk)
+            
+            # Display metrics
+            col_sim1, col_sim2, col_sim3, col_sim4 = st.columns(4)
+            with col_sim1:
+                st.metric("R² Score", f"{r2:.3f}")
+            with col_sim2:
+                st.metric("RMSE", f"{rmse:.2f}")
+            with col_sim3:
+                st.metric("MAE", f"{mae:.2f}")
+            with col_sim4:
+                st.metric("Risk Accuracy", f"{risk_accuracy:.1%}")
+            
+            # Plot simulated results
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+            
+            # Scatter plot
+            ax1.scatter(actual_values, simulated_predictions, alpha=0.5, s=20)
+            ax1.plot([40, 90], [40, 90], 'r--', label='Perfect Prediction')
+            ax1.set_xlabel('Actual Life Expectancy')
+            ax1.set_ylabel('Simulated Prediction')
+            ax1.set_title('Simulated Model Predictions')
+            ax1.legend()
+            ax1.grid(True, alpha=0.3)
+            ax1.set_aspect('equal', adjustable='box')
+            
+            # Confusion matrix for risk levels
+            risk_levels = ['High', 'Medium', 'Low']
+            cm = confusion_matrix(actual_risk, predicted_risk, labels=risk_levels)
+            
+            im = ax2.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
+            ax2.figure.colorbar(im, ax=ax2)
+            
+            # Set labels
+            ax2.set(xticks=np.arange(cm.shape[1]),
+                   yticks=np.arange(cm.shape[0]),
+                   xticklabels=risk_levels, yticklabels=risk_levels,
+                   title='Risk Level Confusion Matrix',
+                   ylabel='Actual Risk',
+                   xlabel='Predicted Risk')
+            
+            # Rotate tick labels
+            plt.setp(ax2.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
+            
+            # Add text annotations
+            thresh = cm.max() / 2.
+            for i in range(cm.shape[0]):
+                for j in range(cm.shape[1]):
+                    ax2.text(j, i, format(cm[i, j], 'd'),
+                            ha="center", va="center",
+                            color="white" if cm[i, j] > thresh else "black")
+            
+            plt.tight_layout()
+            st.pyplot(fig)
+            
+            st.info("**Note:** This is a simulation. Upload your actual model predictions for accurate analysis.")
+        
+        # 4. DOWNLOAD PROCESSED DATA
+        st.header("💾 Download Processed Data")
+        
+        processed_csv = df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Download Processed Dataset with Risk Levels",
+            data=processed_csv,
+            file_name="processed_dataset_with_risk_levels.csv",
+            mime="text/csv",
+            help="Includes original data plus calculated Health Risk Levels"
+        )
+        
+        # Show column information
+        with st.expander("📋 Dataset Column Information"):
+            col_info = pd.DataFrame({
+                'Column': df.columns,
+                'Data Type': df.dtypes.astype(str),
+                'Non-Null Count': df.notnull().sum(),
+                'Null Count': df.isnull().sum(),
+                'Unique Values': [df[col].nunique() if df[col].dtype == 'object' else '-' for col in df.columns]
+            })
+            st.dataframe(col_info, use_container_width=True, height=400)
     
     except Exception as e:
         st.error(f"Error processing file: {str(e)}")
-        st.info("Make sure you've selected numeric columns for life expectancy values.")
+        st.code(f"Error details: {e}", language='python')
 
 else:
     # Show instructions
-    st.info("👆 Upload your regression results CSV file")
+    st.info("👆 Upload your dataset CSV file (like UnifiedDataset.csv from your notebook)")
     
-    st.write("""
-    ### How to prepare your data:
-    
-    **In your notebook, save your regression results:**
-    ```python
-    # After training your regression model
-    results = pd.DataFrame({
-        'Actual_Life_Expectancy': y_test,      # Actual values from test set
-        'Predicted_Life_Expectancy': y_pred    # Model predictions
+    # Show example of what the app creates
+    st.write("**Example of created Risk Levels:**")
+    example_df = pd.DataFrame({
+        'Life_Expectancy': [55, 62, 78, 45, 85, 68],
+        'Health_Risk_Level': ['High', 'Medium', 'Low', 'High', 'Low', 'Medium']
     })
-    
-    # Save to CSV
-    results.to_csv('regression_results.csv', index=False)
-    ```
-    
-    **Expected format:**
-    - Two numeric columns: Actual and Predicted life expectancy values
-    - Example:
-    """)
-    
-    example = pd.DataFrame({
-        'Actual_Life_Expectancy': [58.3, 72.1, 81.5, 65.8, 79.2],
-        'Predicted_Life_Expectancy': [56.8, 71.5, 80.9, 67.2, 78.5]
-    })
-    st.dataframe(example, use_container_width=True)
-    
-    st.write("""
-    **What this app shows:**
-    1. **Distribution plots** of actual vs predicted values
-    2. **Risk level analysis** based on life expectancy thresholds
-    3. **Regression plots** with performance metrics
-    4. **Error analysis** to understand prediction accuracy
-    """)
+    st.dataframe(example_df, use_container_width=True)
+
+# Footer
+st.markdown("---")
+st.markdown("""
+<div style='text-align: center'>
+    <p>This app analyzes Life Expectancy data and creates Health Risk Level classifications.</p>
+    <p>Based on your notebook: Random Forest regression for Life Expectancy prediction.</p>
+</div>
+""", unsafe_allow_html=True)
