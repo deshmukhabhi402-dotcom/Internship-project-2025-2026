@@ -4,598 +4,307 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from io import StringIO
-import warnings
-warnings.filterwarnings('ignore')
 
-# Page configuration
-st.set_page_config(
-    page_title="Life Expectancy Risk Analysis",
-    page_icon="📊",
-    layout="wide"
-)
+# Page setup
+st.set_page_config(page_title="Risk Analysis", layout="wide")
+st.title("📊 Life Expectancy Risk Analysis")
 
-# Custom CSS
-st.markdown("""
-<style>
-    .main-header {
-        font-size: 2.5rem;
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        text-align: center;
-        font-weight: bold;
-        margin-bottom: 1rem;
-    }
-    .metric-card {
-        background: white;
-        border-radius: 10px;
-        padding: 15px;
-        margin: 10px 0;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        border-left: 4px solid #764ba2;
-    }
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 10px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        border-radius: 8px 8px 0 0;
-        padding: 10px 20px;
-    }
-    .actual { color: #2196F3; font-weight: bold; }
-    .predicted { color: #FF5722; font-weight: bold; }
-    .risk-high { color: #FF5252; }
-    .risk-medium { color: #FFA726; }
-    .risk-low { color: #4CAF50; }
-</style>
-""", unsafe_allow_html=True)
+# 1. LOAD DATASET
+st.header("1. Load Dataset")
+uploaded_file = st.file_uploader("Upload your CSV file", type=['csv'])
 
-# Title
-st.markdown('<h1 class="main-header">📈 Life Expectancy Risk Analysis Dashboard</h1>', unsafe_allow_html=True)
-st.markdown("### Compare Predicted vs Actual Risk Levels")
-
-# Initialize session state
-if 'data_loaded' not in st.session_state:
-    st.session_state.data_loaded = False
-if 'predictions_made' not in st.session_state:
-    st.session_state.predictions_made = False
-if 'df' not in st.session_state:
-    st.session_state.df = None
-if 'risk_predictions' not in st.session_state:
-    st.session_state.risk_predictions = None
-
-# Sidebar for navigation
-with st.sidebar:
-    st.title("📋 Navigation")
-    page = st.radio(
-        "Go to:",
-        ["📥 Load Dataset", "📊 Risk Analysis Dashboard"]
-    )
+if uploaded_file is not None:
+    # Load data
+    df = pd.read_csv(uploaded_file)
+    st.success(f"Dataset loaded: {df.shape[0]} rows, {df.shape[1]} columns")
     
-    st.markdown("---")
-    st.markdown("### About")
-    st.info("""
-    This dashboard shows:
-    1. Predicted vs Actual Risk Levels
-    2. Risk Distribution
-    3. Classification Report
-    """)
-
-# Page 1: Load Dataset
-if page == "📥 Load Dataset":
-    st.markdown("## 📥 Load Your Dataset")
+    # Show first 5 rows
+    with st.expander("Preview data"):
+        st.dataframe(df.head())
     
-    col1, col2 = st.columns([2, 1])
-    
-    with col1:
-        # File upload
-        uploaded_file = st.file_uploader(
-            "Upload CSV file", 
-            type=['csv'],
-            help="Upload your dataset with 'Life_Expectancy' column"
+    # Check for Life_Expectancy column
+    if 'Life_Expectancy' in df.columns:
+        st.success("✓ Life_Expectancy column found")
+        
+        # 2. CREATE RISK CATEGORIES
+        st.header("2. Risk Categories")
+        
+        # Define risk levels
+        df['Actual_Risk'] = pd.cut(
+            df['Life_Expectancy'],
+            bins=[0, 60, 75, 100],
+            labels=['High Risk', 'Medium Risk', 'Low Risk']
         )
         
-        if uploaded_file is not None:
-            try:
-                # Load the dataset
-                df = pd.read_csv(uploaded_file)
-                st.session_state.df = df
-                st.session_state.data_loaded = True
-                
-                st.success(f"✅ Dataset loaded successfully!")
-                st.write(f"**Shape:** {df.shape[0]} rows × {df.shape[1]} columns")
-                
-                # Show first 5 rows
-                with st.expander("👁️ Preview first 5 rows"):
-                    st.dataframe(df.head(), use_container_width=True)
-                
-                # Check for required columns
-                if 'Life_Expectancy' in df.columns:
-                    st.success("✅ 'Life_Expectancy' column found!")
-                    
-                    # Generate sample predictions (replace with your actual model)
-                    np.random.seed(42)
-                    
-                    # Create actual risk levels based on life expectancy
-                    df['Actual_Risk'] = pd.cut(
-                        df['Life_Expectancy'],
-                        bins=[0, 60, 75, 100],
-                        labels=['High Risk', 'Medium Risk', 'Low Risk']
-                    )
-                    
-                    # Generate sample predictions (85% accuracy)
-                    n_samples = len(df)
-                    correct_predictions = int(0.85 * n_samples)
-                    wrong_predictions = n_samples - correct_predictions
-                    
-                    predicted = df['Actual_Risk'].copy()
-                    
-                    # Introduce some errors
-                    error_indices = np.random.choice(n_samples, wrong_predictions, replace=False)
-                    for idx in error_indices:
-                        actual = df.loc[idx, 'Actual_Risk']
-                        # Predict a different risk level
-                        options = ['High Risk', 'Medium Risk', 'Low Risk']
-                        options.remove(actual)
-                        predicted[idx] = np.random.choice(options)
-                    
-                    df['Predicted_Risk'] = predicted
-                    
-                    # Calculate accuracy and classification metrics
-                    accuracy = (df['Actual_Risk'] == df['Predicted_Risk']).mean()
-                    
-                    # Store in session state
-                    st.session_state.risk_predictions = {
-                        'df': df,
-                        'accuracy': accuracy,
-                        'actual_counts': df['Actual_Risk'].value_counts(),
-                        'predicted_counts': df['Predicted_Risk'].value_counts()
-                    }
-                    st.session_state.predictions_made = True
-                    
-                    st.success("✅ Sample predictions generated!")
-                    st.metric("Sample Model Accuracy", f"{accuracy:.1%}")
-                    
-                else:
-                    st.warning("⚠️ 'Life_Expectancy' column not found. Please upload a dataset with this column.")
-                
-            except Exception as e:
-                st.error(f"❌ Error loading file: {str(e)}")
-    
-    with col2:
-        st.markdown("### 📋 Data Requirements")
-        st.info("""
-        Your dataset should include:
-        - **Life_Expectancy** column
-        - Health indicators
-        - Socioeconomic factors
-        - Any other relevant features
-        """)
+        # Generate sample predictions (85% accuracy)
+        np.random.seed(42)
+        n = len(df)
         
-        # Sample data option
-        with st.expander("🎲 Generate Sample Data"):
-            if st.button("Generate Sample Dataset"):
-                np.random.seed(42)
-                
-                # Create sample data
-                sample_data = pd.DataFrame({
-                    'Country': ['Country_' + str(i) for i in range(100)],
-                    'Year': np.random.randint(2000, 2020, 100),
-                    'Life_Expectancy': np.random.uniform(45, 85, 100),
-                    'Adult_Mortality': np.random.uniform(50, 300, 100),
-                    'BMI': np.random.uniform(15, 40, 100),
-                    'Alcohol': np.random.uniform(0.1, 15, 100),
-                    'GDP': np.random.uniform(100, 50000, 100),
-                    'Schooling': np.random.uniform(5, 20, 100),
-                    'HIV_AIDS': np.random.uniform(0, 5, 100)
-                })
-                
-                # Create risk levels
-                sample_data['Actual_Risk'] = pd.cut(
-                    sample_data['Life_Expectancy'],
-                    bins=[0, 60, 75, 100],
-                    labels=['High Risk', 'Medium Risk', 'Low Risk']
-                )
-                
-                # Generate predictions with some errors
-                predicted = sample_data['Actual_Risk'].copy()
-                error_indices = np.random.choice(100, 15, replace=False)
-                for idx in error_indices:
-                    actual = sample_data.loc[idx, 'Actual_Risk']
-                    options = ['High Risk', 'Medium Risk', 'Low Risk']
-                    options.remove(actual)
-                    predicted[idx] = np.random.choice(options)
-                
-                sample_data['Predicted_Risk'] = predicted
-                
-                st.session_state.df = sample_data
-                st.session_state.data_loaded = True
-                
-                # Calculate metrics
-                accuracy = (sample_data['Actual_Risk'] == sample_data['Predicted_Risk']).mean()
-                
-                st.session_state.risk_predictions = {
-                    'df': sample_data,
-                    'accuracy': accuracy,
-                    'actual_counts': sample_data['Actual_Risk'].value_counts(),
-                    'predicted_counts': sample_data['Predicted_Risk'].value_counts()
-                }
-                st.session_state.predictions_made = True
-                
-                st.success("✅ Sample dataset created!")
-                st.metric("Sample Size", "100 records")
-                st.metric("Sample Accuracy", f"{accuracy:.1%}")
-
-# Page 2: Risk Analysis Dashboard
-elif page == "📊 Risk Analysis Dashboard":
-    if not st.session_state.predictions_made:
-        st.warning("⚠️ Please load a dataset first and generate predictions.")
-        if st.button("Go to Load Dataset"):
-            st.switch_page("📥 Load Dataset")
-    else:
-        predictions = st.session_state.risk_predictions
-        df = predictions['df']
+        # Start with actual values
+        predictions = df['Actual_Risk'].copy()
         
-        # Display key metrics at top
+        # Make 15% wrong predictions
+        wrong_count = int(0.15 * n)
+        wrong_indices = np.random.choice(n, wrong_count, replace=False)
+        
+        for idx in wrong_indices:
+            actual = df.loc[idx, 'Actual_Risk']
+            # Predict a different risk level
+            if actual == 'High Risk':
+                predictions[idx] = np.random.choice(['Medium Risk', 'Low Risk'])
+            elif actual == 'Medium Risk':
+                predictions[idx] = np.random.choice(['High Risk', 'Low Risk'])
+            else:
+                predictions[idx] = np.random.choice(['High Risk', 'Medium Risk'])
+        
+        df['Predicted_Risk'] = predictions
+        
+        # Calculate accuracy
+        accuracy = (df['Actual_Risk'] == df['Predicted_Risk']).mean()
+        
+        # Display metrics
         col1, col2, col3 = st.columns(3)
-        
         with col1:
-            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            st.metric("Model Accuracy", f"{predictions['accuracy']:.1%}")
-            st.markdown('</div>', unsafe_allow_html=True)
-        
+            st.metric("Accuracy", f"{accuracy:.1%}")
         with col2:
-            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            st.metric("Total Records", len(df))
-            st.markdown('</div>', unsafe_allow_html=True)
-        
+            st.metric("Total Samples", n)
         with col3:
-            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            st.metric("Features", df.shape[1])
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.metric("Risk Categories", 3)
         
-        # Tab layout for different visualizations
-        tab1, tab2, tab3 = st.tabs([
-            "📊 Predicted vs Actual", 
-            "📈 Risk Distribution", 
-            "📋 Classification Report"
-        ])
+        # 3. VISUALIZATIONS
+        st.header("3. Visualizations")
         
-        # Tab 1: Predicted vs Actual
+        # Tab layout
+        tab1, tab2, tab3 = st.tabs(["Predicted vs Actual", "Risk Distribution", "Classification Report"])
+        
+        # TAB 1: Predicted vs Actual
         with tab1:
             st.subheader("Predicted vs Actual Risk Levels")
             
-            col1_graph, col2_graph = st.columns(2)
+            # Count values
+            actual_counts = df['Actual_Risk'].value_counts()
+            predicted_counts = df['Predicted_Risk'].value_counts()
             
-            with col1_graph:
-                st.markdown("#### Bar Graph")
-                
-                # Prepare data for bar chart
-                risk_levels = ['High Risk', 'Medium Risk', 'Low Risk']
-                actual_counts = [predictions['actual_counts'].get(level, 0) for level in risk_levels]
-                predicted_counts = [predictions['predicted_counts'].get(level, 0) for level in risk_levels]
-                
-                # Create bar chart
-                fig, ax = plt.subplots(figsize=(10, 6))
-                x = np.arange(len(risk_levels))
+            # Ensure all categories exist
+            categories = ['High Risk', 'Medium Risk', 'Low Risk']
+            for cat in categories:
+                if cat not in actual_counts:
+                    actual_counts[cat] = 0
+                if cat not in predicted_counts:
+                    predicted_counts[cat] = 0
+            
+            # Sort by categories
+            actual_counts = actual_counts.reindex(categories)
+            predicted_counts = predicted_counts.reindex(categories)
+            
+            # Create two columns for graphs
+            col_graph1, col_graph2 = st.columns(2)
+            
+            with col_graph1:
+                # BAR GRAPH
+                st.write("**Bar Graph**")
+                fig, ax = plt.subplots(figsize=(8, 5))
+                x = np.arange(len(categories))
                 width = 0.35
                 
-                bars1 = ax.bar(x - width/2, actual_counts, width, 
-                              label='Actual', color='#2196F3', alpha=0.8)
-                bars2 = ax.bar(x + width/2, predicted_counts, width, 
-                              label='Predicted', color='#FF5722', alpha=0.8)
+                ax.bar(x - width/2, actual_counts.values, width, label='Actual', color='blue', alpha=0.7)
+                ax.bar(x + width/2, predicted_counts.values, width, label='Predicted', color='orange', alpha=0.7)
                 
                 ax.set_xlabel('Risk Level')
                 ax.set_ylabel('Count')
-                ax.set_title('Predicted vs Actual Risk Levels')
+                ax.set_title('Predicted vs Actual')
                 ax.set_xticks(x)
-                ax.set_xticklabels(risk_levels)
+                ax.set_xticklabels(categories)
                 ax.legend()
                 
-                # Add value labels on bars
-                for bars in [bars1, bars2]:
-                    for bar in bars:
-                        height = bar.get_height()
-                        ax.annotate(f'{int(height)}',
-                                   xy=(bar.get_x() + bar.get_width() / 2, height),
-                                   xytext=(0, 3),  # 3 points vertical offset
-                                   textcoords="offset points",
-                                   ha='center', va='bottom')
+                # Add numbers on bars
+                for i, (act, pred) in enumerate(zip(actual_counts.values, predicted_counts.values)):
+                    ax.text(i - width/2, act + 0.5, str(int(act)), ha='center')
+                    ax.text(i + width/2, pred + 0.5, str(int(pred)), ha='center')
                 
-                plt.tight_layout()
                 st.pyplot(fig)
-                
-                # Display comparison table
-                st.write("**Count Comparison:**")
-                comparison_df = pd.DataFrame({
-                    'Risk Level': risk_levels,
-                    'Actual': actual_counts,
-                    'Predicted': predicted_counts,
-                    'Difference': np.array(predicted_counts) - np.array(actual_counts)
-                })
-                st.dataframe(comparison_df, use_container_width=True)
             
-            with col2_graph:
-                st.markdown("#### Line Graph")
+            with col_graph2:
+                # LINE GRAPH
+                st.write("**Line Graph**")
+                fig, ax = plt.subplots(figsize=(10, 5))
                 
-                # Prepare data for line chart
-                # Sort by life expectancy for better visualization
-                sorted_df = df.sort_values('Life_Expectancy').reset_index(drop=True)
+                # Take first 50 samples for clarity
+                sample_size = min(50, len(df))
+                sample_df = df.head(sample_size).copy()
+                sample_df = sample_df.sort_values('Life_Expectancy').reset_index(drop=True)
                 
-                # Create line chart
-                fig, ax = plt.subplots(figsize=(12, 6))
+                # Convert risk to numeric for line plot
+                risk_to_num = {'High Risk': 0, 'Medium Risk': 1, 'Low Risk': 2}
+                actual_numeric = sample_df['Actual_Risk'].map(risk_to_num)
+                predicted_numeric = sample_df['Predicted_Risk'].map(risk_to_num)
                 
-                # Plot actual risk (convert to numeric for line)
-                risk_mapping = {'High Risk': 0, 'Medium Risk': 1, 'Low Risk': 2}
-                actual_numeric = sorted_df['Actual_Risk'].map(risk_mapping)
-                predicted_numeric = sorted_df['Predicted_Risk'].map(risk_mapping)
+                ax.plot(actual_numeric.index, actual_numeric.values, 
+                       label='Actual', marker='o', linewidth=2, color='blue')
+                ax.plot(predicted_numeric.index, predicted_numeric.values, 
+                       label='Predicted', marker='s', linewidth=2, color='orange', alpha=0.7)
                 
-                ax.plot(sorted_df.index, actual_numeric, 
-                       label='Actual Risk', color='#2196F3', linewidth=2, marker='o', markersize=4)
-                ax.plot(sorted_df.index, predicted_numeric, 
-                       label='Predicted Risk', color='#FF5722', linewidth=2, marker='s', markersize=4, alpha=0.7)
-                
-                # Highlight mismatches
-                mismatches = sorted_df[sorted_df['Actual_Risk'] != sorted_df['Predicted_Risk']].index
+                # Mark mismatches
+                mismatches = sample_df[sample_df['Actual_Risk'] != sample_df['Predicted_Risk']].index
                 if len(mismatches) > 0:
                     ax.scatter(mismatches, predicted_numeric[mismatches], 
-                              color='red', s=100, zorder=5, label='Mismatch', alpha=0.6)
+                              color='red', s=100, zorder=5, label='Mismatch')
                 
-                # Customize y-axis
+                ax.set_xlabel('Sample Index')
+                ax.set_ylabel('Risk Level (0=High, 1=Medium, 2=Low)')
+                ax.set_title('Risk Prediction Across Samples')
                 ax.set_yticks([0, 1, 2])
-                ax.set_yticklabels(['High Risk', 'Medium Risk', 'Low Risk'])
-                ax.set_xlabel('Sample Index (sorted by Life Expectancy)')
-                ax.set_ylabel('Risk Level')
-                ax.set_title('Predicted vs Actual Risk (Sorted by Life Expectancy)')
+                ax.set_yticklabels(['High', 'Medium', 'Low'])
                 ax.legend()
                 ax.grid(True, alpha=0.3)
                 
-                plt.tight_layout()
                 st.pyplot(fig)
-                
-                # Show mismatches
-                mismatch_count = len(mismatches)
-                st.write(f"**Mismatches:** {mismatch_count} out of {len(df)} samples ({mismatch_count/len(df)*100:.1f}%)")
         
-        # Tab 2: Risk Distribution
+        # TAB 2: Risk Distribution
         with tab2:
-            st.subheader("Risk Level Distribution")
+            st.subheader("Risk Distribution")
             
-            col1_dist, col2_dist = st.columns(2)
+            col_dist1, col_dist2 = st.columns(2)
             
-            with col1_dist:
-                st.markdown("#### Actual Risk Distribution")
+            with col_dist1:
+                # Actual Distribution
+                st.write("**Actual Risk Distribution**")
+                fig, ax = plt.subplots(figsize=(8, 5))
                 
-                # Prepare data
-                actual_counts = predictions['actual_counts']
-                
-                # Create bar chart
-                fig, ax = plt.subplots(figsize=(10, 6))
-                colors = ['#FF5252', '#FFA726', '#4CAF50']  # Red, Orange, Green
-                
-                bars = ax.bar(actual_counts.index, actual_counts.values, 
-                             color=colors, alpha=0.8)
-                
-                ax.set_xlabel('Risk Level')
-                ax.set_ylabel('Count')
+                colors = ['#FF6B6B', '#FFD93D', '#6BCF7F']  # Red, Yellow, Green
+                wedges, texts, autotexts = ax.pie(
+                    actual_counts.values,
+                    labels=actual_counts.index,
+                    autopct='%1.1f%%',
+                    colors=colors,
+                    startangle=90
+                )
+                ax.axis('equal')
                 ax.set_title('Actual Risk Distribution')
-                
-                # Add value labels
-                for bar in bars:
-                    height = bar.get_height()
-                    ax.annotate(f'{int(height)}',
-                               xy=(bar.get_x() + bar.get_width() / 2, height),
-                               xytext=(0, 3),
-                               textcoords="offset points",
-                               ha='center', va='bottom')
-                
-                plt.tight_layout()
                 st.pyplot(fig)
-                
-                # Show percentages
-                st.write("**Actual Distribution (%):**")
-                percentages = (actual_counts / actual_counts.sum() * 100).round(1)
-                for risk, percent in percentages.items():
-                    if risk == 'High Risk':
-                        st.markdown(f'<span class="risk-high">{risk}: {percent}%</span>', unsafe_allow_html=True)
-                    elif risk == 'Medium Risk':
-                        st.markdown(f'<span class="risk-medium">{risk}: {percent}%</span>', unsafe_allow_html=True)
-                    else:
-                        st.markdown(f'<span class="risk-low">{risk}: {percent}%</span>', unsafe_allow_html=True)
             
-            with col2_dist:
-                st.markdown("#### Predicted Risk Distribution")
+            with col_dist2:
+                # Predicted Distribution
+                st.write("**Predicted Risk Distribution**")
+                fig, ax = plt.subplots(figsize=(8, 5))
                 
-                # Prepare data
-                predicted_counts = predictions['predicted_counts']
-                
-                # Create bar chart
-                fig, ax = plt.subplots(figsize=(10, 6))
-                colors = ['#FF5252', '#FFA726', '#4CAF50']
-                
-                bars = ax.bar(predicted_counts.index, predicted_counts.values, 
-                             color=colors, alpha=0.8)
-                
-                ax.set_xlabel('Risk Level')
-                ax.set_ylabel('Count')
+                wedges, texts, autotexts = ax.pie(
+                    predicted_counts.values,
+                    labels=predicted_counts.index,
+                    autopct='%1.1f%%',
+                    colors=colors,
+                    startangle=90
+                )
+                ax.axis('equal')
                 ax.set_title('Predicted Risk Distribution')
-                
-                # Add value labels
-                for bar in bars:
-                    height = bar.get_height()
-                    ax.annotate(f'{int(height)}',
-                               xy=(bar.get_x() + bar.get_width() / 2, height),
-                               xytext=(0, 3),
-                               textcoords="offset points",
-                               ha='center', va='bottom')
-                
-                plt.tight_layout()
                 st.pyplot(fig)
-                
-                # Show percentages
-                st.write("**Predicted Distribution (%):**")
-                percentages = (predicted_counts / predicted_counts.sum() * 100).round(1)
-                for risk, percent in percentages.items():
-                    if risk == 'High Risk':
-                        st.markdown(f'<span class="risk-high">{risk}: {percent}%</span>', unsafe_allow_html=True)
-                    elif risk == 'Medium Risk':
-                        st.markdown(f'<span class="risk-medium">{risk}: {percent}%</span>', unsafe_allow_html=True)
-                    else:
-                        st.markdown(f'<span class="risk-low">{risk}: {percent}%</span>', unsafe_allow_html=True)
             
-            # Combined distribution comparison
-            st.markdown("---")
-            st.markdown("#### Distribution Comparison")
+            # Bar chart comparison
+            st.write("**Distribution Comparison**")
+            fig, ax = plt.subplots(figsize=(10, 5))
             
-            # Create comparison chart
-            fig, ax = plt.subplots(figsize=(12, 6))
-            
-            risk_levels = ['High Risk', 'Medium Risk', 'Low Risk']
-            actual_percent = [(predictions['actual_counts'].get(level, 0) / len(df) * 100) for level in risk_levels]
-            predicted_percent = [(predictions['predicted_counts'].get(level, 0) / len(df) * 100) for level in risk_levels]
-            
-            x = np.arange(len(risk_levels))
+            x = np.arange(len(categories))
             width = 0.35
             
-            bars1 = ax.bar(x - width/2, actual_percent, width, 
-                          label='Actual %', color='#2196F3', alpha=0.8)
-            bars2 = ax.bar(x + width/2, predicted_percent, width, 
-                          label='Predicted %', color='#FF5722', alpha=0.8)
+            bars1 = ax.bar(x - width/2, actual_counts.values, width, 
+                          label='Actual', color='blue', alpha=0.7)
+            bars2 = ax.bar(x + width/2, predicted_counts.values, width, 
+                          label='Predicted', color='orange', alpha=0.7)
             
             ax.set_xlabel('Risk Level')
-            ax.set_ylabel('Percentage (%)')
-            ax.set_title('Percentage Distribution: Actual vs Predicted')
+            ax.set_ylabel('Count')
+            ax.set_title('Risk Distribution: Actual vs Predicted')
             ax.set_xticks(x)
-            ax.set_xticklabels(risk_levels)
+            ax.set_xticklabels(categories)
             ax.legend()
             
-            # Add percentage labels
+            # Add value labels
             for bars in [bars1, bars2]:
                 for bar in bars:
                     height = bar.get_height()
-                    ax.annotate(f'{height:.1f}%',
-                               xy=(bar.get_x() + bar.get_width() / 2, height),
-                               xytext=(0, 3),
-                               textcoords="offset points",
-                               ha='center', va='bottom')
+                    ax.text(bar.get_x() + bar.get_width()/2, height + 0.5,
+                           f'{int(height)}', ha='center', va='bottom')
             
-            plt.tight_layout()
             st.pyplot(fig)
         
-        # Tab 3: Classification Report
+        # TAB 3: Classification Report
         with tab3:
             st.subheader("Classification Report")
             
-            # Calculate classification metrics
-            from sklearn.metrics import classification_report
+            # Calculate metrics manually
+            from sklearn.metrics import confusion_matrix, classification_report
             
-            # Generate classification report
-            report = classification_report(df['Actual_Risk'], df['Predicted_Risk'], 
-                                          output_dict=True, zero_division=0)
+            # Create confusion matrix
+            cm = confusion_matrix(df['Actual_Risk'], df['Predicted_Risk'], 
+                                  labels=categories)
+            
+            # Display confusion matrix
+            st.write("**Confusion Matrix**")
+            fig, ax = plt.subplots(figsize=(6, 5))
+            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
+                       xticklabels=categories,
+                       yticklabels=categories,
+                       ax=ax)
+            ax.set_xlabel('Predicted')
+            ax.set_ylabel('Actual')
+            ax.set_title('Confusion Matrix')
+            st.pyplot(fig)
+            
+            # Calculate and display classification report
+            st.write("**Classification Metrics**")
+            report_dict = classification_report(df['Actual_Risk'], df['Predicted_Risk'], 
+                                               output_dict=True, zero_division=0)
             
             # Convert to DataFrame
-            report_df = pd.DataFrame(report).transpose()
+            report_df = pd.DataFrame(report_dict).transpose()
             
             # Display as table
-            st.write("**Detailed Classification Metrics:**")
-            
-            # Style the dataframe
-            styled_df = report_df.style.format({
+            st.dataframe(report_df.style.format({
                 'precision': '{:.2f}',
                 'recall': '{:.2f}',
                 'f1-score': '{:.2f}',
                 'support': '{:.0f}'
-            }).background_gradient(subset=['precision', 'recall', 'f1-score'], 
-                                  cmap='YlOrRd', low=0.3, high=0.7)
-            
-            st.dataframe(styled_df, use_container_width=True)
+            }), use_container_width=True)
             
             # Visualize metrics
-            st.markdown("#### Metrics Visualization")
+            st.write("**Metrics Visualization**")
+            fig, axes = plt.subplots(1, 3, figsize=(12, 4))
             
-            fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+            metrics_to_show = ['precision', 'recall', 'f1-score']
+            metric_colors = ['#FF9800', '#2196F3', '#4CAF50']
             
-            metrics = ['precision', 'recall', 'f1-score']
-            colors = ['#FF9800', '#2196F3', '#4CAF50']
-            
-            for idx, (metric, color) in enumerate(zip(metrics, colors)):
-                ax = axes[idx]
-                
-                # Get values for each class
+            for i, (metric, color) in enumerate(zip(metrics_to_show, metric_colors)):
+                ax = axes[i]
                 values = []
-                labels = []
-                for class_name in ['High Risk', 'Medium Risk', 'Low Risk']:
-                    if class_name in report:
-                        values.append(report[class_name][metric])
-                        labels.append(class_name[:1])  # First letter
+                for cat in categories:
+                    if cat in report_dict:
+                        values.append(report_dict[cat][metric])
                 
-                if values:
-                    bars = ax.bar(range(len(values)), values, color=color, alpha=0.8)
-                    ax.set_xticks(range(len(values)))
-                    ax.set_xticklabels(labels)
-                    ax.set_ylim([0, 1])
-                    ax.set_title(f'{metric.capitalize()} by Class')
-                    ax.set_ylabel('Score')
-                    
-                    # Add value labels
-                    for bar in bars:
-                        height = bar.get_height()
-                        ax.annotate(f'{height:.2f}',
-                                   xy=(bar.get_x() + bar.get_width() / 2, height),
-                                   xytext=(0, 3),
-                                   textcoords="offset points",
-                                   ha='center', va='bottom')
+                bars = ax.bar(categories, values, color=color, alpha=0.7)
+                ax.set_ylim([0, 1])
+                ax.set_title(metric.capitalize())
+                ax.set_ylabel('Score')
+                
+                # Add value labels
+                for bar in bars:
+                    height = bar.get_height()
+                    ax.text(bar.get_x() + bar.get_width()/2, height + 0.02,
+                           f'{height:.2f}', ha='center')
             
             plt.tight_layout()
             st.pyplot(fig)
-            
-            # Confusion Matrix
-            st.markdown("#### Confusion Matrix")
-            
-            from sklearn.metrics import confusion_matrix
-            
-            cm = confusion_matrix(df['Actual_Risk'], df['Predicted_Risk'], 
-                                  labels=['High Risk', 'Medium Risk', 'Low Risk'])
-            
-            fig, ax = plt.subplots(figsize=(8, 6))
-            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
-                       xticklabels=['High', 'Medium', 'Low'],
-                       yticklabels=['High', 'Medium', 'Low'],
-                       ax=ax)
-            ax.set_xlabel('Predicted Risk')
-            ax.set_ylabel('Actual Risk')
-            ax.set_title('Confusion Matrix')
-            
-            st.pyplot(fig)
-            
-            # Interpretation
-            st.markdown("#### Interpretation")
-            col_interpret1, col_interpret2 = st.columns(2)
-            
-            with col_interpret1:
-                st.info("""
-                **High Risk Class:**
-                - Most critical to predict correctly
-                - False negatives are costly
-                - Precision indicates correct high-risk identification
-                """)
-            
-            with col_interpret2:
-                st.info("""
-                **Overall Performance:**
-                - Accuracy: Overall correct predictions
-                - Weighted avg: Accounts for class imbalance
-                - Support: Number of actual occurrences
-                """)
+    
+    else:
+        st.error("❌ 'Life_Expectancy' column not found in dataset")
 
-# Footer
-st.markdown("---")
-st.markdown(
-    """
-    <div style='text-align: center; color: #666; padding: 20px;'>
-        <p>📈 Life Expectancy Risk Analysis Dashboard | Streamlit</p>
-        <p>Actual vs Predicted Risk Level Comparison</p>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+else:
+    st.info("👆 Please upload a CSV file to begin analysis")
+    
+    # Show sample data structure
+    st.write("**Expected data format:**")
+    st.code("""
+    Country,Year,Life_Expectancy,Adult_Mortality,BMI,Alcohol,GDP,Schooling
+    Afghanistan,2015,65.0,263,19.1,0.01,584.3,10.1
+    Albania,2015,77.8,69,27.2,7.29,3943.0,13.9
+    Algeria,2015,76.5,88,27.2,0.73,4777.9,14.6
+    """)
