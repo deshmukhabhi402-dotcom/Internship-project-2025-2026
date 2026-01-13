@@ -78,19 +78,16 @@ if uploaded_file is not None:
         # 4. GENERATE SAMPLE PREDICTIONS
         st.header("4. Generate Sample Predictions")
         
-        # Get prediction accuracy from user
-        accuracy = st.slider("Set prediction accuracy:", 0.5, 1.0, 0.85, 0.05)
-        
         if st.button("Generate Predictions", type="primary"):
-            # Generate sample predictions
+            # Generate sample predictions with 85% accuracy
             np.random.seed(42)
             n = len(df)
             
             # Start with actual values
             predictions = df['Actual_Risk'].copy()
             
-            # Make some wrong predictions based on accuracy
-            wrong_count = int((1 - accuracy) * n)
+            # Make 15% wrong predictions
+            wrong_count = int(0.15 * n)
             wrong_indices = np.random.choice(n, wrong_count, replace=False)
             
             for idx in wrong_indices:
@@ -105,11 +102,10 @@ if uploaded_file is not None:
             
             df['Predicted_Risk'] = predictions
             
-            # Calculate actual accuracy
+            # Calculate accuracy
             actual_accuracy = (df['Actual_Risk'] == df['Predicted_Risk']).mean()
             
-            # Display metrics
-            st.success(f"✓ Predictions generated with {actual_accuracy:.1%} accuracy")
+            st.success("✓ Predictions generated!")
             
             # Show sample predictions
             with st.expander("View predictions (first 10 rows)"):
@@ -292,33 +288,6 @@ if uploaded_file is not None:
             
             plt.tight_layout()
             st.pyplot(fig)
-            
-            # Show additional insights
-            st.write("**Key Insights:**")
-            
-            # Calculate misclassification rates
-            mismatches = df[df['Actual_Risk'] != df['Predicted_Risk']]
-            if len(mismatches) > 0:
-                misclass_counts = mismatches['Actual_Risk'].value_counts()
-                
-                col_insight1, col_insight2, col_insight3 = st.columns(3)
-                
-                with col_insight1:
-                    st.metric("Total Mismatches", len(mismatches))
-                
-                with col_insight2:
-                    if 'High Risk' in misclass_counts:
-                        high_risk_error = misclass_counts['High Risk'] / risk_counts.get('High Risk', 1)
-                        st.metric("High Risk Error Rate", f"{high_risk_error:.1%}")
-                
-                with col_insight3:
-                    # Most common error type
-                    if len(mismatches) > 0:
-                        error_types = mismatches.groupby(['Actual_Risk', 'Predicted_Risk']).size()
-                        if len(error_types) > 0:
-                            most_common_error = error_types.idxmax()
-                            st.metric("Most Common Error", 
-                                     f"{most_common_error[0]} → {most_common_error[1]}")
         
     else:
         st.error(f"❌ Column '{life_exp_col}' is not numeric. Please select a numeric column.")
