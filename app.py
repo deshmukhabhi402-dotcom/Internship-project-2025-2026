@@ -35,7 +35,7 @@ def risk_level(le):
 uploaded_file = st.file_uploader("📁 Upload your dataset CSV with Life Expectancy columns", type=['csv'])
 
 if uploaded_file is not None:
-    if uploaded_file.size == 0:
+    try:
         # Load data
         df = pd.read_csv(uploaded_file)
         
