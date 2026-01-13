@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+from sklearn.metrics import classification_report, confusion_matrix
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -34,7 +35,7 @@ def risk_level(le):
 uploaded_file = st.file_uploader("📁 Upload your dataset CSV with Life Expectancy columns", type=['csv'])
 
 if uploaded_file is not None:
-    try:
+    if uploaded_file.size == 0:
         # Load data
         df = pd.read_csv(uploaded_file)
         
@@ -340,7 +341,76 @@ if uploaded_file is not None:
                 })
                 st.dataframe(stats_df, use_container_width=True)
         
-        # 5. SAMPLE DATA WITH RISK LEVELS
+        # 5. CLASSIFICATION REPORT (PLAIN TEXT)
+        st.header("📋 Classification Report")
+        
+        if len(life_cols) >= 2:
+            # Generate classification report comparing first two columns
+            col1, col2 = life_cols[0], life_cols[1]
+            
+            # Ensure we have risk columns
+            if f'{col1}_Risk' in df.columns and f'{col2}_Risk' in df.columns:
+                # Get non-null values
+                mask = df[f'{col1}_Risk'].notna() & df[f'{col2}_Risk'].notna()
+                y_true = df.loc[mask, f'{col1}_Risk']
+                y_pred = df.loc[mask, f'{col2}_Risk']
+                
+                # Generate classification report
+                st.write(f"**Classification Report: {col1} vs {col2}**")
+                
+                report_dict = classification_report(y_true, y_pred, 
+                                                   labels=['Low', 'Medium', 'High'], 
+                                                   output_dict=True)
+                
+                # Display as plain text
+                report_text = classification_report(y_true, y_pred, 
+                                                   labels=['Low', 'Medium', 'High'])
+                
+                st.code(report_text, language='text')
+                
+                # Also show as formatted metrics
+                st.write("**Key Metrics:**")
+                
+                metrics_col1, metrics_col2, metrics_col3, metrics_col4 = st.columns(4)
+                
+                with metrics_col1:
+                    accuracy = report_dict['accuracy']
+                    st.metric("Accuracy", f"{accuracy:.2%}")
+                
+                with metrics_col2:
+                    macro_avg_precision = report_dict['macro avg']['precision']
+                    st.metric("Macro Avg Precision", f"{macro_avg_precision:.3f}")
+                
+                with metrics_col3:
+                    macro_avg_recall = report_dict['macro avg']['recall']
+                    st.metric("Macro Avg Recall", f"{macro_avg_recall:.3f}")
+                
+                with metrics_col4:
+                    macro_avg_f1 = report_dict['macro avg']['f1-score']
+                    st.metric("Macro Avg F1-Score", f"{macro_avg_f1:.3f}")
+                
+                # Show per-class metrics in a table
+                st.write("**Per-Class Metrics:**")
+                
+                class_metrics = []
+                for class_name in ['Low', 'Medium', 'High']:
+                    if class_name in report_dict:
+                        class_metrics.append({
+                            'Class': class_name,
+                            'Precision': report_dict[class_name]['precision'],
+                            'Recall': report_dict[class_name]['recall'],
+                            'F1-Score': report_dict[class_name]['f1-score'],
+                            'Support': int(report_dict[class_name]['support'])
+                        })
+                
+                class_metrics_df = pd.DataFrame(class_metrics)
+                st.dataframe(class_metrics_df.style.format({
+                    'Precision': '{:.3f}',
+                    'Recall': '{:.3f}',
+                    'F1-Score': '{:.3f}'
+                }), use_container_width=True)
+        
+        # 6. SAMPLE DATA WITH RISK LEVELS
         st.header("🔍 Sample Data with Risk Levels")
         
         # Show sample of data with risk levels
@@ -354,47 +424,5 @@ if uploaded_file is not None:
                 display_cols.append(f'{col}_Risk')
         
         # Add any additional important columns
-        other_cols = ['Country', 'Year', 'Gender']
-        for col in other_cols:
-            if col in df.columns:
-                display_cols.append(col)
-        
-        # Remove duplicates
-        display_cols = list(dict.fromkeys(display_cols))
-        
-        st.dataframe(df[display_cols].head(sample_size), use_container_width=True)
-        
-        # 6. SUMMARY
-        st.header("📋 Summary")
-        
-        # Create summary statistics
-        summary_data = []
-        for col in life_cols:
-            if f'{col}_Risk' in df.columns:
-                counts = df[f'{col}_Risk'].value_counts().reindex(['Low', 'Medium', 'High'], fill_value=0)
-                total = counts.sum()
-                
-                for risk in ['Low', 'Medium', 'High']:
-                    count = counts.get(risk, 0)
-                    percentage = (count / total * 100) if total > 0 else 0
-                    
-                    summary_data.append({
-                        'Column': col,
-                        'Risk Level': risk,
-                        'Count': count,
-                        'Percentage': f"{percentage:.1f}%"
-                    })
-        
-        summary_df = pd.DataFrame(summary_data)
-        st.dataframe(summary_df, use_container_width=True)
-        
-        # Add explanation
-        st.info("""
-        **Interpretation:**
-        - **High Risk** (Life Expectancy < 60): Immediate health interventions needed
-        - **Medium Risk** (Life Expectancy 60-70): Preventive care recommended
-        - **Low Risk** (Life Expectancy > 70): Good health status
-        """)
-    
-    except Exception as e:
-        st.error(f"Error processing file: {e}")
+        other_cols = [col for col in df.columns if col not in display_cols][:3]  # First 3 other columns
+        display_cols = other_cols + display_cols
