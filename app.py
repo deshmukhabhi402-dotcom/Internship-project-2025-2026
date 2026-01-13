@@ -187,56 +187,110 @@ if uploaded_file is not None:
                             st.pyplot(fig)
                         
                         with tab2:
-                            # BAR GRAPH - Risk Distribution
-                            st.subheader("Risk Distribution")
+                            # BAR GRAPH - Risk Distribution (ACTUAL ONLY)
+                            st.subheader("Actual Risk Distribution")
                             
-                            fig, ax = plt.subplots(figsize=(10, 6))
+                            # Create two columns for different visualizations
+                            col_vis1, col_vis2 = st.columns(2)
                             
-                            # Create side-by-side bars
-                            x = np.arange(len(categories))
-                            width = 0.35
+                            with col_vis1:
+                                # Bar Chart
+                                st.write("**Bar Chart**")
+                                fig, ax = plt.subplots(figsize=(8, 6))
+                                
+                                # Define colors for each risk level
+                                colors = ['#FF5252', '#FFA726', '#66BB6A']  # Red, Orange, Green
+                                
+                                bars = ax.bar(actual_counts.index, actual_counts.values, 
+                                             color=colors, alpha=0.8, edgecolor='black', linewidth=1)
+                                
+                                # Customize the chart
+                                ax.set_xlabel('Risk Level', fontsize=12)
+                                ax.set_ylabel('Count', fontsize=12)
+                                ax.set_title('Actual Risk Distribution', fontsize=14, fontweight='bold')
+                                ax.set_xticklabels(['High\n(<60 years)', 'Medium\n(60-75 years)', 'Low\n(>75 years)'])
+                                ax.grid(True, alpha=0.3, axis='y')
+                                
+                                # Add value labels on bars
+                                for bar in bars:
+                                    height = bar.get_height()
+                                    ax.text(bar.get_x() + bar.get_width()/2, height + 0.5,
+                                           f'{int(height)}', ha='center', va='bottom',
+                                           fontsize=11, fontweight='bold')
+                                
+                                plt.tight_layout()
+                                st.pyplot(fig)
                             
-                            bars_actual = ax.bar(x - width/2, actual_counts.values, width, 
-                                                label='Actual Distribution', 
-                                                color=['#FF5252', '#FFA726', '#66BB6A'], alpha=0.8)
-                            bars_predicted = ax.bar(x + width/2, predicted_counts.values, width, 
-                                                   label='Predicted Distribution',
-                                                   color=['#FF5252', '#FFA726', '#66BB6A'], alpha=0.5)
+                            with col_vis2:
+                                # Pie Chart
+                                st.write("**Pie Chart**")
+                                fig, ax = plt.subplots(figsize=(8, 6))
+                                
+                                colors = ['#FF5252', '#FFA726', '#66BB6A']
+                                explode = (0.05, 0.05, 0.05)  # Slight explode for all slices
+                                
+                                wedges, texts, autotexts = ax.pie(
+                                    actual_counts.values,
+                                    labels=actual_counts.index,
+                                    autopct='%1.1f%%',
+                                    colors=colors,
+                                    explode=explode,
+                                    startangle=90,
+                                    shadow=True
+                                )
+                                
+                                # Customize the pie chart
+                                ax.axis('equal')  # Equal aspect ratio ensures that pie is drawn as a circle
+                                ax.set_title('Risk Distribution Percentage', fontsize=14, fontweight='bold')
+                                
+                                # Style the text
+                                for autotext in autotexts:
+                                    autotext.set_color('white')
+                                    autotext.set_fontweight('bold')
+                                    autotext.set_fontsize(11)
+                                
+                                for text in texts:
+                                    text.set_fontsize(11)
+                                
+                                st.pyplot(fig)
                             
-                            # Customize the chart
-                            ax.set_xlabel('Risk Level', fontsize=12)
-                            ax.set_ylabel('Count', fontsize=12)
-                            ax.set_title('Risk Distribution: Actual vs Predicted', fontsize=14, fontweight='bold')
-                            ax.set_xticks(x)
-                            ax.set_xticklabels(['High\n(<60 years)', 'Medium\n(60-75 years)', 'Low\n(>75 years)'])
-                            ax.legend()
-                            ax.grid(True, alpha=0.3, axis='y')
+                            # Statistics section
+                            st.write("---")
+                            st.write("**Distribution Statistics:**")
                             
-                            # Add value labels
-                            for i, (act, pred) in enumerate(zip(actual_counts.values, predicted_counts.values)):
-                                ax.text(i - width/2, act + 0.5, f'{int(act)}', 
-                                       ha='center', va='bottom', fontsize=10, fontweight='bold')
-                                ax.text(i + width/2, pred + 0.5, f'{int(pred)}', 
-                                       ha='center', va='bottom', fontsize=10, fontweight='bold')
+                            # Calculate percentages
+                            total = actual_counts.sum()
+                            percentages = (actual_counts / total * 100).round(1)
                             
-                            plt.tight_layout()
-                            st.pyplot(fig)
+                            col_stat1, col_stat2, col_stat3 = st.columns(3)
                             
-                            # Show percentage distribution
-                            st.write("**Distribution Percentages:**")
-                            col_perc1, col_perc2 = st.columns(2)
+                            with col_stat1:
+                                st.markdown("**High Risk**")
+                                st.markdown(f"<h3 style='color: #FF5252;'>{actual_counts['High Risk']}</h3>", 
+                                           unsafe_allow_html=True)
+                                st.write(f"{percentages['High Risk']}% of total")
+                                st.write("Life Expectancy: < 60 years")
                             
-                            with col_perc1:
-                                st.write("**Actual Distribution:**")
-                                for risk, count in actual_counts.items():
-                                    percentage = (count / actual_counts.sum() * 100)
-                                    st.write(f"- {risk}: {percentage:.1f}% ({count} samples)")
+                            with col_stat2:
+                                st.markdown("**Medium Risk**")
+                                st.markdown(f"<h3 style='color: #FFA726;'>{actual_counts['Medium Risk']}</h3>", 
+                                           unsafe_allow_html=True)
+                                st.write(f"{percentages['Medium Risk']}% of total")
+                                st.write("Life Expectancy: 60-75 years")
                             
-                            with col_perc2:
-                                st.write("**Predicted Distribution:**")
-                                for risk, count in predicted_counts.items():
-                                    percentage = (count / predicted_counts.sum() * 100)
-                                    st.write(f"- {risk}: {percentage:.1f}% ({count} samples)")
+                            with col_stat3:
+                                st.markdown("**Low Risk**")
+                                st.markdown(f"<h3 style='color: #66BB6A;'>{actual_counts['Low Risk']}</h3>", 
+                                           unsafe_allow_html=True)
+                                st.write(f"{percentages['Low Risk']}% of total")
+                                st.write("Life Expectancy: > 75 years")
+                            
+                            # Summary
+                            st.write("---")
+                            st.write("**Summary:**")
+                            dominant_risk = actual_counts.idxmax()
+                            dominant_percentage = percentages[dominant_risk]
+                            st.write(f"The most common risk level is **{dominant_risk}** with **{dominant_percentage}%** of the dataset.")
                         
                         with tab3:
                             # CLASSIFICATION REPORT
@@ -395,5 +449,8 @@ else:
        - **Medium Risk**: 60-75 years
        - **Low Risk**: > 75 years
     3. Generates sample predictions
-    4. Shows visualizations comparing actual vs predicted risk levels
+    4. Shows visualizations:
+       - **Tab 1**: Predicted vs Actual comparison
+       - **Tab 2**: Actual Risk Distribution (bar and pie charts)
+       - **Tab 3**: Classification Report with metrics
     """)
