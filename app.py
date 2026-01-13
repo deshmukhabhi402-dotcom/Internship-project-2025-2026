@@ -3,8 +3,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.metrics import classification_report
 
 # --------------------------------------------------
 # PAGE CONFIG
@@ -13,7 +12,7 @@ st.set_page_config(page_title="Life Expectancy Risk Analysis", layout="wide")
 st.title("📊 Life Expectancy Risk Level Analysis")
 
 st.markdown("""
-### Risk Definition (from notebook)
+### Risk Definition
 - **High Risk**: Life Expectancy < 60  
 - **Medium Risk**: 60 ≤ Life Expectancy ≤ 75  
 - **Low Risk**: Life Expectancy > 75  
@@ -87,7 +86,6 @@ st.success(f"Detected Life Expectancy column → {life_col}")
 df["Actual_Risk"] = df[life_col].apply(assign_risk)
 df = df.dropna(subset=["Actual_Risk"])
 
-# enforce category order
 df["Actual_Risk"] = pd.Categorical(
     df["Actual_Risk"],
     categories=RISK_ORDER,
@@ -95,7 +93,7 @@ df["Actual_Risk"] = pd.Categorical(
 )
 
 # --------------------------------------------------
-# GENERATE PREDICTIONS (SIMULATED, CONSISTENT)
+# GENERATE PREDICTIONS (SIMULATED)
 # --------------------------------------------------
 st.header("🔮 Generate Predictions")
 
@@ -121,7 +119,7 @@ df["Predicted_Risk"] = pd.Categorical(
 )
 
 # --------------------------------------------------
-# SINGLE EVALUATION DATAFRAME (CRITICAL FIX)
+# SINGLE EVALUATION DATAFRAME
 # --------------------------------------------------
 df_eval = df[
     df["Actual_Risk"].notna() &
@@ -135,32 +133,27 @@ actual_counts = df_eval["Actual_Risk"].value_counts().sort_index()
 predicted_counts = df_eval["Predicted_Risk"].value_counts().sort_index()
 
 # --------------------------------------------------
-# DISTRIBUTION GRAPHS
+# SINGLE RISK DISTRIBUTION (ACTUAL ONLY)
 # --------------------------------------------------
-st.header("📊 Risk Distributions")
+st.header("📊 Actual Risk Distribution")
 
-c1, c2 = st.columns(2)
+fig, ax = plt.subplots(figsize=(7, 5))
+bars = ax.bar(
+    actual_counts.index,
+    actual_counts.values,
+    color=["#66BB6A", "#FFA726", "#EF5350"]
+)
 
-with c1:
-    fig, ax = plt.subplots(figsize=(6, 4))
-    bars = ax.bar(actual_counts.index, actual_counts.values, color="#2196F3")
-    ax.set_title("Actual Risk Distribution")
-    ax.set_ylabel("Count")
-    ax.grid(axis="y", alpha=0.3)
-    add_value_labels(ax, bars)
-    st.pyplot(fig)
+ax.set_xlabel("Risk Level")
+ax.set_ylabel("Count")
+ax.set_title("Actual Risk Distribution", fontweight="bold")
+ax.grid(axis="y", alpha=0.3)
 
-with c2:
-    fig, ax = plt.subplots(figsize=(6, 4))
-    bars = ax.bar(predicted_counts.index, predicted_counts.values, color="#FF5722")
-    ax.set_title("Predicted Risk Distribution")
-    ax.set_ylabel("Count")
-    ax.grid(axis="y", alpha=0.3)
-    add_value_labels(ax, bars)
-    st.pyplot(fig)
+add_value_labels(ax, bars)
+st.pyplot(fig)
 
 # --------------------------------------------------
-# ACTUAL VS PREDICTED (MATCHING VALUES)
+# ACTUAL VS PREDICTED COMPARISON
 # --------------------------------------------------
 st.header("📈 Actual vs Predicted Risk Levels")
 
@@ -168,8 +161,21 @@ fig, ax = plt.subplots(figsize=(10, 6))
 x = np.arange(len(RISK_ORDER))
 width = 0.35
 
-bars_a = ax.bar(x - width/2, actual_counts.values, width, label="Actual", color="#2196F3")
-bars_p = ax.bar(x + width/2, predicted_counts.values, width, label="Predicted", color="#FF5722")
+bars_a = ax.bar(
+    x - width / 2,
+    actual_counts.values,
+    width,
+    label="Actual",
+    color="#2196F3"
+)
+
+bars_p = ax.bar(
+    x + width / 2,
+    predicted_counts.values,
+    width,
+    label="Predicted",
+    color="#FF5722"
+)
 
 ax.set_xticks(x)
 ax.set_xticklabels(["Low", "Medium", "High"])
@@ -181,36 +187,10 @@ ax.grid(axis="y", alpha=0.3)
 
 add_value_labels(ax, bars_a)
 add_value_labels(ax, bars_p)
-
 st.pyplot(fig)
 
 # --------------------------------------------------
-# CONFUSION MATRIX
-# --------------------------------------------------
-st.header("📉 Confusion Matrix")
-
-cm = confusion_matrix(
-    df_eval["Actual_Risk"],
-    df_eval["Predicted_Risk"],
-    labels=RISK_ORDER
-)
-
-fig, ax = plt.subplots(figsize=(6, 5))
-sns.heatmap(
-    cm,
-    annot=True,
-    fmt="d",
-    cmap="YlOrRd",
-    xticklabels=["Low", "Medium", "High"],
-    yticklabels=["Low", "Medium", "High"],
-    ax=ax
-)
-ax.set_xlabel("Predicted")
-ax.set_ylabel("Actual")
-st.pyplot(fig)
-
-# --------------------------------------------------
-# CLASSIFICATION REPORT (TABLE)
+# CLASSIFICATION REPORT (TABLE ONLY)
 # --------------------------------------------------
 st.header("📋 Classification Report")
 
@@ -247,9 +227,9 @@ st.header("📌 Summary Metrics")
 accuracy = (df_eval["Actual_Risk"] == df_eval["Predicted_Risk"]).mean()
 mismatches = (df_eval["Actual_Risk"] != df_eval["Predicted_Risk"]).sum()
 
-m1, m2 = st.columns(2)
-m1.metric("Accuracy", f"{accuracy:.2%}")
-m2.metric("Mismatches", mismatches)
+c1, c2 = st.columns(2)
+c1.metric("Accuracy", f"{accuracy:.2%}")
+c2.metric("Mismatches", mismatches)
 
 # --------------------------------------------------
 # SAMPLE OUTPUT
