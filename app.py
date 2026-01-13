@@ -1,125 +1,30 @@
 import streamlit as st
-import pandas as pd
+import pickle
 import numpy as np
 
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
-from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import Pipeline
-from sklearn.impute import SimpleImputer
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+# Load trained model
+with open("model.pkl", "rb") as f:
+    model = pickle.load(f)
 
-import matplotlib.pyplot as plt
-import seaborn as sns
+st.title("Health Risk Prediction System")
 
-# ----------------------------
-# Page config
-# ----------------------------
-st.set_page_config(
-    page_title="ML Intern Project",
-    layout="wide"
-)
+st.subheader("Enter Patient Details")
 
-st.title("📊 Machine Learning Project Dashboard")
+# Example input fields (adjust to match your model)
+age = st.number_input("Age", min_value=0, max_value=120)
+bmi = st.number_input("BMI", min_value=0.0)
+bp = st.number_input("Blood Pressure", min_value=0.0)
+glucose = st.number_input("Glucose Level", min_value=0.0)
 
-# ----------------------------
-# Load Data
-# ----------------------------
-@st.cache_data
-def load_data():
-    return pd.read_csv("UnifiedDataset.csv")
+# Predict button
+if st.button("Predict Health Risk"):
+    input_data = np.array([[age, bmi, bp, glucose]])
+    prediction = model.predict(input_data)
 
-df = load_data()
-
-st.subheader("Dataset Preview")
-st.dataframe(df.head())
-
-st.write("Shape:", df.shape)
-
-# ----------------------------
-# Target selection
-# ----------------------------
-st.subheader("Target Variable Selection")
-
-target_col = st.selectbox(
-    "Select the target column",
-    options=df.columns
-)
-
-X = df.drop(columns=[target_col])
-y = df[target_col]
-
-# ----------------------------
-# Preprocessing
-# ----------------------------
-numeric_features = X.select_dtypes(include=["int64", "float64"]).columns
-categorical_features = X.select_dtypes(include=["object"]).columns
-
-numeric_transformer = Pipeline(steps=[
-    ("imputer", SimpleImputer(strategy="median")),
-    ("scaler", StandardScaler())
-])
-
-categorical_transformer = Pipeline(steps=[
-    ("imputer", SimpleImputer(strategy="most_frequent")),
-    ("onehot", OneHotEncoder(handle_unknown="ignore"))
-])
-
-preprocessor = ColumnTransformer(
-    transformers=[
-        ("num", numeric_transformer, numeric_features),
-        ("cat", categorical_transformer, categorical_features),
-    ]
-)
-
-# ----------------------------
-# Model
-# ----------------------------
-model = RandomForestClassifier(
-    n_estimators=100,
-    random_state=42
-)
-
-pipeline = Pipeline(steps=[
-    ("preprocessor", preprocessor),
-    ("model", model)
-])
-
-# ----------------------------
-# Train Model
-# ----------------------------
-if st.button("🚀 Train Model"):
-    with st.spinner("Training model..."):
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, random_state=42
-        )
-
-        pipeline.fit(X_train, y_train)
-        y_pred = pipeline.predict(X_test)
-
-        acc = accuracy_score(y_test, y_pred)
-
-    st.success("Model trained successfully!")
-
-    st.metric("Accuracy", f"{acc:.4f}")
-
-    # ----------------------------
-    # Classification Report
-    # ----------------------------
-    st.subheader("Classification Report")
-    report = classification_report(y_test, y_pred, output_dict=True)
-    st.dataframe(pd.DataFrame(report).transpose())
-
-    # ----------------------------
-    # Confusion Matrix
-    # ----------------------------
-    st.subheader("Confusion Matrix")
-    cm = confusion_matrix(y_test, y_pred)
-
-    fig, ax = plt.subplots()
-    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", ax=ax)
-    ax.set_xlabel("Predicted")
-    ax.set_ylabel("Actual")
-
-    st.pyplot(fig)
+    # Only target value shown on frontend
+    st.success(f"Health Risk Level: {prediction[0]}")
+    
+def predict_health_risk(input_data):
+    return model.predict(input_data)[0]
+risk = predict_health_risk(input_data)
+st.success(f"Health Risk Level: {risk}")
