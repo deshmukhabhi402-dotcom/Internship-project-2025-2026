@@ -9,8 +9,6 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
 from sklearn.metrics import (mean_squared_error, mean_absolute_error, 
                             r2_score, classification_report, confusion_matrix)
-import plotly.graph_objects as go
-import plotly.express as px
 import joblib
 import io
 import warnings
@@ -278,16 +276,15 @@ def show_data_overview(predictor):
             
             # Plot missing values
             if len(missing_df[missing_df['Missing_Values'] > 0]) > 0:
-                fig = px.bar(
-                    missing_df[missing_df['Missing_Values'] > 0],
-                    x='Column',
-                    y='Percentage',
-                    title='Missing Values Percentage by Column',
-                    color='Percentage',
-                    color_continuous_scale='Reds'
+                fig, ax = plt.subplots(figsize=(10, 6))
+                bars = ax.barh(
+                    missing_df[missing_df['Missing_Values'] > 0]['Column'][:15],
+                    missing_df[missing_df['Missing_Values'] > 0]['Percentage'][:15]
                 )
-                fig.update_layout(xaxis_tickangle=-45)
-                st.plotly_chart(fig, use_container_width=True)
+                ax.set_xlabel('Percentage Missing')
+                ax.set_title('Missing Values Percentage by Column (Top 15)')
+                plt.tight_layout()
+                st.pyplot(fig)
 
 def show_data_analysis(predictor):
     st.header("🔍 Data Analysis")
@@ -303,28 +300,23 @@ def show_data_analysis(predictor):
     
     with col1:
         # Histogram
-        fig = px.histogram(
-            predictor.df,
-            x='Life Expectancy',
-            nbins=50,
-            title='Distribution of Life Expectancy',
-            color_discrete_sequence=['#1f77b4']
-        )
-        fig.update_layout(
-            xaxis_title='Life Expectancy',
-            yaxis_title='Count'
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        fig, ax = plt.subplots(figsize=(8, 6))
+        ax.hist(predictor.df['Life Expectancy'], bins=50, color='#1f77b4', alpha=0.7)
+        ax.set_xlabel('Life Expectancy')
+        ax.set_ylabel('Count')
+        ax.set_title('Distribution of Life Expectancy')
+        ax.grid(True, alpha=0.3)
+        st.pyplot(fig)
     
     with col2:
         # Box plot
-        fig = px.box(
-            predictor.df,
-            y='Life Expectancy',
-            title='Box Plot of Life Expectancy',
-            color_discrete_sequence=['#ff7f0e']
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        fig, ax = plt.subplots(figsize=(8, 6))
+        ax.boxplot(predictor.df['Life Expectancy'], vert=False, patch_artist=True,
+                  boxprops=dict(facecolor='#ff7f0e'))
+        ax.set_xlabel('Life Expectancy')
+        ax.set_title('Box Plot of Life Expectancy')
+        ax.grid(True, alpha=0.3)
+        st.pyplot(fig)
     
     # Correlation analysis
     st.subheader("Correlation Analysis")
@@ -341,15 +333,12 @@ def show_data_analysis(predictor):
         corr_matrix = predictor.df[top_corr_features.tolist() + ['Life Expectancy']].corr()
         
         # Plot heatmap
-        fig = px.imshow(
-            corr_matrix,
-            title='Correlation Heatmap (Top 15 features with Life Expectancy)',
-            color_continuous_scale='RdBu',
-            zmin=-1,
-            zmax=1
-        )
-        fig.update_layout(width=800, height=600)
-        st.plotly_chart(fig, use_container_width=True)
+        fig, ax = plt.subplots(figsize=(12, 10))
+        sns.heatmap(corr_matrix, annot=True, cmap='RdBu', center=0, 
+                   square=True, linewidths=0.5, cbar_kws={"shrink": 0.8}, ax=ax)
+        ax.set_title('Correlation Heatmap (Top 15 features with Life Expectancy)')
+        plt.tight_layout()
+        st.pyplot(fig)
     
     # Risk level distribution (after preprocessing)
     if hasattr(predictor, 'df_processed'):
@@ -360,27 +349,32 @@ def show_data_analysis(predictor):
         col1, col2 = st.columns(2)
         
         with col1:
-            fig = px.pie(
-                names=risk_counts.index,
-                values=risk_counts.values,
-                title='Health Risk Level Distribution',
-                color_discrete_sequence=px.colors.qualitative.Set3
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            # Pie chart
+            fig, ax = plt.subplots(figsize=(8, 6))
+            colors = plt.cm.Set3(np.linspace(0, 1, len(risk_counts)))
+            ax.pie(risk_counts.values, labels=risk_counts.index, autopct='%1.1f%%',
+                  colors=colors, startangle=90)
+            ax.set_title('Health Risk Level Distribution')
+            ax.axis('equal')
+            st.pyplot(fig)
         
         with col2:
-            fig = px.bar(
-                x=risk_counts.index,
-                y=risk_counts.values,
-                title='Health Risk Level Counts',
-                color=risk_counts.index,
-                color_discrete_sequence=px.colors.qualitative.Set3
-            )
-            fig.update_layout(
-                xaxis_title='Risk Level',
-                yaxis_title='Count'
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            # Bar chart
+            fig, ax = plt.subplots(figsize=(8, 6))
+            colors = plt.cm.Set3(np.linspace(0, 1, len(risk_counts)))
+            bars = ax.bar(risk_counts.index, risk_counts.values, color=colors)
+            ax.set_xlabel('Risk Level')
+            ax.set_ylabel('Count')
+            ax.set_title('Health Risk Level Counts')
+            
+            # Add count labels on bars
+            for bar in bars:
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2., height,
+                       f'{int(height)}', ha='center', va='bottom')
+            
+            plt.tight_layout()
+            st.pyplot(fig)
 
 def show_model_training(predictor):
     st.header("🤖 Model Training")
@@ -488,21 +482,22 @@ def show_model_training(predictor):
         
         feature_importance = predictor.get_feature_importance(top_n=15)
         
-        fig = px.bar(
-            feature_importance,
-            x='importance',
-            y='feature',
-            orientation='h',
-            title='Top 15 Feature Importances',
-            color='importance',
-            color_continuous_scale='Viridis'
-        )
-        fig.update_layout(
-            yaxis={'categoryorder': 'total ascending'},
-            xaxis_title='Importance',
-            yaxis_title='Feature'
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        fig, ax = plt.subplots(figsize=(10, 8))
+        y_pos = np.arange(len(feature_importance))
+        bars = ax.barh(y_pos, feature_importance['importance'].values)
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels(feature_importance['feature'].values)
+        ax.invert_yaxis()  # labels read top-to-bottom
+        ax.set_xlabel('Importance')
+        ax.set_title('Top 15 Feature Importances')
+        
+        # Color bars by importance
+        cmap = plt.cm.viridis
+        for i, bar in enumerate(bars):
+            bar.set_color(cmap(i / len(bars)))
+        
+        plt.tight_layout()
+        st.pyplot(fig)
 
 def show_results_metrics(predictor):
     st.header("📈 Results & Metrics")
@@ -532,36 +527,27 @@ def show_results_metrics(predictor):
     # Actual vs Predicted Plot
     st.subheader("Actual vs Predicted Life Expectancy")
     
-    fig = go.Figure()
-    
-    fig.add_trace(go.Scatter(
-        x=predictor.y_test,
-        y=predictor.y_pred,
-        mode='markers',
-        name='Predictions',
-        marker=dict(color='blue', opacity=0.6)
-    ))
+    fig, ax = plt.subplots(figsize=(10, 8))
+    ax.scatter(predictor.y_test, predictor.y_pred, alpha=0.6, color='blue', label='Predictions')
     
     # Add perfect prediction line
     min_val = min(predictor.y_test.min(), predictor.y_pred.min())
     max_val = max(predictor.y_test.max(), predictor.y_pred.max())
+    ax.plot([min_val, max_val], [min_val, max_val], 'r--', label='Perfect Prediction')
     
-    fig.add_trace(go.Scatter(
-        x=[min_val, max_val],
-        y=[min_val, max_val],
-        mode='lines',
-        name='Perfect Prediction',
-        line=dict(color='red', dash='dash')
-    ))
+    ax.set_xlabel('Actual Life Expectancy')
+    ax.set_ylabel('Predicted Life Expectancy')
+    ax.set_title('Actual vs Predicted Values')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
     
-    fig.update_layout(
-        title='Actual vs Predicted Values',
-        xaxis_title='Actual Life Expectancy',
-        yaxis_title='Predicted Life Expectancy',
-        showlegend=True
-    )
+    # Add R² text
+    ax.text(0.05, 0.95, f'R² = {predictor.r2:.3f}', transform=ax.transAxes,
+            fontsize=12, verticalalignment='top',
+            bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
     
-    st.plotly_chart(fig, use_container_width=True)
+    plt.tight_layout()
+    st.pyplot(fig)
     
     # Classification Report
     st.subheader("Classification Report (Risk Levels)")
@@ -589,22 +575,14 @@ def show_results_metrics(predictor):
         classes = ['High', 'Low', 'Medium']  # Based on your classification report
         
         # Create heatmap
-        fig = px.imshow(
-            predictor.conf_matrix,
-            text_auto=True,
-            color_continuous_scale='Blues',
-            labels=dict(x="Predicted", y="Actual", color="Count"),
-            x=classes,
-            y=classes,
-            title="Confusion Matrix"
-        )
-        
-        fig.update_layout(
-            xaxis_title='Predicted Label',
-            yaxis_title='True Label'
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
+        fig, ax = plt.subplots(figsize=(8, 6))
+        sns.heatmap(predictor.conf_matrix, annot=True, fmt='d', cmap='Blues',
+                   xticklabels=classes, yticklabels=classes, ax=ax)
+        ax.set_xlabel('Predicted Label')
+        ax.set_ylabel('True Label')
+        ax.set_title('Confusion Matrix')
+        plt.tight_layout()
+        st.pyplot(fig)
     
     # Residual Analysis
     st.subheader("Residual Analysis")
@@ -615,40 +593,24 @@ def show_results_metrics(predictor):
     
     with col1:
         # Residuals distribution
-        fig = px.histogram(
-            residuals,
-            nbins=50,
-            title='Distribution of Residuals',
-            color_discrete_sequence=['#ff7f0e']
-        )
-        fig.update_layout(
-            xaxis_title='Residuals',
-            yaxis_title='Count'
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        fig, ax = plt.subplots(figsize=(8, 6))
+        ax.hist(residuals, bins=50, color='#ff7f0e', alpha=0.7)
+        ax.set_xlabel('Residuals')
+        ax.set_ylabel('Count')
+        ax.set_title('Distribution of Residuals')
+        ax.grid(True, alpha=0.3)
+        st.pyplot(fig)
     
     with col2:
         # Residuals vs Predicted
-        fig = go.Figure()
-        
-        fig.add_trace(go.Scatter(
-            x=predictor.y_pred,
-            y=residuals,
-            mode='markers',
-            name='Residuals',
-            marker=dict(color='green', opacity=0.6)
-        ))
-        
-        # Add zero line
-        fig.add_hline(y=0, line_dash="dash", line_color="red")
-        
-        fig.update_layout(
-            title='Residuals vs Predicted Values',
-            xaxis_title='Predicted Life Expectancy',
-            yaxis_title='Residuals'
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
+        fig, ax = plt.subplots(figsize=(8, 6))
+        ax.scatter(predictor.y_pred, residuals, alpha=0.6, color='green')
+        ax.axhline(y=0, color='r', linestyle='--')
+        ax.set_xlabel('Predicted Life Expectancy')
+        ax.set_ylabel('Residuals')
+        ax.set_title('Residuals vs Predicted Values')
+        ax.grid(True, alpha=0.3)
+        st.pyplot(fig)
     
     # Error metrics by risk level
     st.subheader("Error Analysis by Risk Level")
@@ -669,21 +631,23 @@ def show_results_metrics(predictor):
         'Error': errors
     })
     
-    fig = px.box(
-        error_by_risk,
-        x='Actual Risk',
-        y='Error',
-        color='Actual Risk',
-        title='Prediction Error Distribution by Risk Level',
-        color_discrete_sequence=px.colors.qualitative.Set3
-    )
+    fig, ax = plt.subplots(figsize=(10, 6))
+    boxplot = ax.boxplot([error_by_risk[error_by_risk['Actual Risk'] == risk]['Error'].values 
+                         for risk in ['High', 'Medium', 'Low']],
+                        labels=['High', 'Medium', 'Low'],
+                        patch_artist=True)
     
-    fig.update_layout(
-        xaxis_title='Actual Risk Level',
-        yaxis_title='Absolute Error'
-    )
+    # Color the boxes
+    colors = plt.cm.Set3(np.linspace(0, 1, 3))
+    for patch, color in zip(boxplot['boxes'], colors):
+        patch.set_facecolor(color)
     
-    st.plotly_chart(fig, use_container_width=True)
+    ax.set_xlabel('Actual Risk Level')
+    ax.set_ylabel('Absolute Error')
+    ax.set_title('Prediction Error Distribution by Risk Level')
+    ax.grid(True, alpha=0.3)
+    plt.tight_layout()
+    st.pyplot(fig)
 
 def show_predictions(predictor):
     st.header("🔮 Make Predictions")
@@ -779,17 +743,27 @@ def show_predictions(predictor):
             feature_importance = predictor.get_feature_importance(top_n=10)
             
             # Display as horizontal bar chart
-            fig = px.bar(
-                feature_importance,
-                x='importance',
-                y='feature',
-                orientation='h',
-                title='Feature Importance (Global)',
-                color='importance',
-                color_continuous_scale='Viridis'
-            )
-            fig.update_layout(
-                yaxis={'categoryorder': 'total ascending'},
-                xaxis_title='Importance',
-                yaxis_title='Feature',
-                height=400)
+            fig, ax = plt.subplots(figsize=(10, 6))
+            y_pos = np.arange(len(feature_importance))
+            bars = ax.barh(y_pos, feature_importance['importance'].values)
+            ax.set_yticks(y_pos)
+            ax.set_yticklabels(feature_importance['feature'].values)
+            ax.invert_yaxis()  # labels read top-to-bottom
+            ax.set_xlabel('Importance')
+            ax.set_title('Feature Importance (Global)')
+            
+            # Color bars by importance
+            cmap = plt.cm.viridis
+            for i, bar in enumerate(bars):
+                bar.set_color(cmap(i / len(bars)))
+            
+            plt.tight_layout()
+            st.pyplot(fig)
+            
+            # Show the input values for top features
+            with st.expander("📋 Input Values Used"):
+                top_input_data = {k: input_data[k] for k in top_features}
+                st.json(top_input_data)
+
+if __name__ == "__main__":
+    main()
