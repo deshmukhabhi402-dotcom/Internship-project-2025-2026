@@ -64,6 +64,9 @@ class HealthRiskPredictor:
             self.df = pd.read_csv(data_path)
             st.success(f"Data loaded successfully! Shape: {self.df.shape}")
             return True
+        except FileNotFoundError:
+            st.error(f"File '{data_path}' not found. Please make sure it's in the same directory.")
+            return False
         except Exception as e:
             st.error(f"Error loading data: {str(e)}")
             return False
@@ -195,8 +198,8 @@ def main():
     
     # Sidebar
     with st.sidebar:
-        st.image("🏥", width=100)
-        st.title("Navigation")
+        # Display title with emoji instead of trying to load image
+        st.markdown("## 🏥 Navigation")
         
         menu = st.selectbox(
             "Choose a section:",
@@ -206,13 +209,25 @@ def main():
         
         st.divider()
         
-        if st.button("🔄 Reset Session"):
-            st.session_state.clear()
-            st.rerun()
+        st.markdown("### Data File")
+        data_file = st.text_input("Dataset filename", "UnifiedDataset.csv")
+        
+        st.divider()
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🔄 Reset Session"):
+                st.session_state.clear()
+                st.rerun()
+        with col2:
+            if st.button("📊 Quick Load"):
+                if predictor.load_data(data_file):
+                    if predictor.preprocess_data():
+                        st.success("Data loaded and preprocessed!")
     
     # Main content based on menu selection
     if menu == "📊 Data Overview":
-        show_data_overview(predictor)
+        show_data_overview(predictor, data_file)
     
     elif menu == "🔍 Data Analysis":
         show_data_analysis(predictor)
@@ -226,18 +241,18 @@ def main():
     elif menu == "🔮 Make Predictions":
         show_predictions(predictor)
 
-def show_data_overview(predictor):
+def show_data_overview(predictor, data_file):
     st.header("📊 Data Overview")
     
     col1, col2 = st.columns(2)
     
     with col1:
         if st.button("📁 Load Data", type="primary"):
-            if predictor.load_data():
+            if predictor.load_data(data_file):
                 st.rerun()
     
     with col2:
-        if st.button("🔄 Preprocess Data", type="secondary"):
+        if st.button("🔄 Preprocess Data", type="secondary") and predictor.df is not None:
             if predictor.preprocess_data():
                 st.rerun()
     
@@ -277,12 +292,15 @@ def show_data_overview(predictor):
             # Plot missing values
             if len(missing_df[missing_df['Missing_Values'] > 0]) > 0:
                 fig, ax = plt.subplots(figsize=(10, 6))
+                # Take top 15 columns with missing values
+                top_missing = missing_df[missing_df['Missing_Values'] > 0].head(15)
                 bars = ax.barh(
-                    missing_df[missing_df['Missing_Values'] > 0]['Column'][:15],
-                    missing_df[missing_df['Missing_Values'] > 0]['Percentage'][:15]
+                    top_missing['Column'],
+                    top_missing['Percentage']
                 )
                 ax.set_xlabel('Percentage Missing')
                 ax.set_title('Missing Values Percentage by Column (Top 15)')
+                ax.set_xlim(0, 100)
                 plt.tight_layout()
                 st.pyplot(fig)
 
@@ -386,6 +404,8 @@ def show_model_training(predictor):
     if not hasattr(predictor, 'df_processed'):
         st.warning("Please preprocess the data first from the Data Overview section.")
         return
+    
+    st.subheader("Model Configuration")
     
     col1, col2, col3 = st.columns(3)
     
