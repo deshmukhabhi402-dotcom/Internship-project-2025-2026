@@ -1,739 +1,795 @@
+# app.py
 import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from io import BytesIO
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+from sklearn.metrics import (mean_squared_error, mean_absolute_error, 
+                            r2_score, classification_report, confusion_matrix)
 import plotly.graph_objects as go
 import plotly.express as px
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, precision_recall_fscore_support
-from sklearn.preprocessing import LabelEncoder, StandardScaler
-from sklearn.impute import SimpleImputer
+import joblib
+import io
 import warnings
 warnings.filterwarnings('ignore')
 
 # Set page configuration
 st.set_page_config(
-    page_title="Health Risk Classification Dashboard",
+    page_title="Health Risk Prediction Dashboard",
     page_icon="🏥",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for better styling
+# Custom CSS
 st.markdown("""
 <style>
-    /* Main header styling */
     .main-header {
-        font-size: 2.8rem;
-        color: #1E3A8A;
+        font-size: 2.5rem;
+        color: #1f77b4;
         text-align: center;
-        margin-bottom: 1.5rem;
-        font-weight: 800;
-        background: linear-gradient(90deg, #1E3A8A, #3B82F6);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        padding: 10px 0;
+        margin-bottom: 2rem;
     }
-    
-    /* Sub-header styling */
-    .sub-header {
-        font-size: 1.8rem;
-        color: #1E40AF;
-        margin-top: 1.5rem;
-        margin-bottom: 1rem;
-        font-weight: 700;
-        border-bottom: 3px solid #3B82F6;
-        padding-bottom: 0.5rem;
-    }
-    
-    /* Section headers */
-    .section-header {
-        font-size: 1.4rem;
-        color: #374151;
-        margin-top: 1.2rem;
-        margin-bottom: 0.8rem;
-        font-weight: 600;
-        background-color: #F3F4F6;
-        padding: 8px 12px;
-        border-radius: 8px;
-        border-left: 4px solid #10B981;
-    }
-    
-    /* Metric cards */
     .metric-card {
-        background: linear-gradient(135deg, #F3F4F6, #E5E7EB);
-        padding: 1.2rem;
-        border-radius: 12px;
-        border: 1px solid #D1D5DB;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        margin-bottom: 1rem;
-        transition: transform 0.2s;
-    }
-    
-    .metric-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    }
-    
-    .metric-title {
-        font-size: 0.9rem;
-        color: #6B7280;
-        font-weight: 600;
-        margin-bottom: 0.3rem;
-    }
-    
-    .metric-value {
-        font-size: 2rem;
-        color: #1F2937;
-        font-weight: 800;
-    }
-    
-    /* Success and error indicators */
-    .success-badge {
-        display: inline-block;
-        background-color: #10B981;
-        color: white;
-        padding: 3px 10px;
-        border-radius: 15px;
-        font-size: 0.8rem;
-        font-weight: 600;
-        margin-left: 8px;
-    }
-    
-    .error-badge {
-        display: inline-block;
-        background-color: #EF4444;
-        color: white;
-        padding: 3px 10px;
-        border-radius: 15px;
-        font-size: 0.8rem;
-        font-weight: 600;
-        margin-left: 8px;
-    }
-    
-    /* Styled tables */
-    .styled-table {
-        border-collapse: collapse;
-        margin: 25px 0;
-        font-size: 0.9em;
-        font-family: sans-serif;
-        min-width: 400px;
-        box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
-        border-radius: 10px;
-        overflow: hidden;
-    }
-    
-    .styled-table thead tr {
-        background-color: #3B82F6;
-        color: #ffffff;
-        text-align: left;
-    }
-    
-    .styled-table th,
-    .styled-table td {
-        padding: 12px 15px;
-    }
-    
-    .styled-table tbody tr {
-        border-bottom: 1px solid #dddddd;
-    }
-    
-    .styled-table tbody tr:nth-of-type(even) {
-        background-color: #f3f3f3;
-    }
-    
-    .styled-table tbody tr:last-of-type {
-        border-bottom: 2px solid #3B82F6;
-    }
-    
-    /* Info boxes */
-    .info-box {
-        background-color: #EFF6FF;
-        border-left: 4px solid #3B82F6;
+        background-color: #f0f2f6;
         padding: 1rem;
-        border-radius: 8px;
-        margin: 1rem 0;
+        border-radius: 10px;
+        text-align: center;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
-    
-    /* Tab styling */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 24px;
-    }
-    
-    .stTabs [data-baseweb="tab"] {
-        height: 50px;
-        white-space: pre-wrap;
-        background-color: #F3F4F6;
-        border-radius: 8px 8px 0px 0px;
-        gap: 1px;
-        padding-top: 10px;
-        padding-bottom: 10px;
-        font-weight: 600;
-    }
-    
-    .stTabs [aria-selected="true"] {
-        background-color: #3B82F6 !important;
-        color: white !important;
+    .stButton button {
+        width: 100%;
+        background-color: #4CAF50;
+        color: white;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Title
-st.markdown("<h1 class='main-header'>🏥 Health Risk Classification Dashboard</h1>", unsafe_allow_html=True)
-
-# Sidebar for data upload and model configuration
-with st.sidebar:
-    st.markdown("### 📁 Data & Model Configuration")
-    
-    # File upload
-    uploaded_file = st.file_uploader("Upload Dataset", type=['csv'], help="Upload your health dataset in CSV format")
-    
-    if uploaded_file is not None:
+class HealthRiskPredictor:
+    def __init__(self):
+        self.df = None
+        self.model = None
+        self.scaler = StandardScaler()
+        self.label_encoders = {}
+        self.X_train = None
+        self.X_test = None
+        self.y_train = None
+        self.y_test = None
+        self.y_pred = None
+        
+    def load_data(self, data_path="UnifiedDataset.csv"):
+        """Load and preprocess the dataset"""
         try:
-            # Load data
-            df = pd.read_csv(uploaded_file)
-            st.session_state.df = df
-            
-            # Display file info
-            st.success(f"✅ File loaded successfully!")
-            st.info(f"**Rows:** {df.shape[0]} | **Columns:** {df.shape[1]}")
-            
-            # Select target variable (assuming 'Life Expectancy' exists)
-            if 'Life Expectancy' in df.columns:
-                st.session_state.target_column = 'Life Expectancy'
-                st.success("✅ Target variable detected: 'Life Expectancy'")
-            else:
-                st.error("❌ 'Life Expectancy' column not found in dataset")
-                
+            self.df = pd.read_csv(data_path)
+            st.success(f"Data loaded successfully! Shape: {self.df.shape}")
+            return True
         except Exception as e:
-            st.error(f"Error loading file: {str(e)}")
-    else:
-        st.warning("⚠️ Please upload a CSV file to begin")
-        # Display sample data structure
-        st.markdown("""
-        ### Expected Data Format:
-        Your dataset should include:
-        - Country, Year, Gender
-        - **Life Expectancy** (target variable)
-        - Infant Mortality Rate
-        - Under 5 Mortality Rate
-        - Various health indicators...
-        """)
-
-# Main content area
-if 'df' in st.session_state and st.session_state.df is not None:
-    df = st.session_state.df
+            st.error(f"Error loading data: {str(e)}")
+            return False
     
-    # Create health risk categories
-    def categorize_risk(life_expectancy):
-        if pd.isna(life_expectancy):
-            return None
-        if life_expectancy < 55:
-            return 'High Risk'
-        elif life_expectancy < 70:
-            return 'Medium Risk'
-        else:
-            return 'Low Risk'
-    
-    # Apply categorization
-    df['Health_Risk_Level'] = df[st.session_state.target_column].apply(categorize_risk)
-    df_model = df.dropna(subset=['Health_Risk_Level'])
-    
-    # Display data overview
-    st.markdown("<h2 class='sub-header'>📊 Dataset Overview</h2>", unsafe_allow_html=True)
-    
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-title">Total Samples</div>
-            <div class="metric-value">{len(df):,}</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        risk_counts = df_model['Health_Risk_Level'].value_counts()
-        low_risk = risk_counts.get('Low Risk', 0)
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-title">Low Risk Cases</div>
-            <div class="metric-value">{low_risk:,}</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col3:
-        medium_risk = risk_counts.get('Medium Risk', 0)
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-title">Medium Risk Cases</div>
-            <div class="metric-value">{medium_risk:,}</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col4:
-        high_risk = risk_counts.get('High Risk', 0)
-        st.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-title">High Risk Cases</div>
-            <div class="metric-value">{high_risk:,}</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # Data preview
-    with st.expander("📋 View Data Sample", expanded=False):
-        st.dataframe(df.head(10), use_container_width=True)
-    
-    # Model training section
-    st.markdown("<h2 class='sub-header'>🤖 Model Training & Results</h2>", unsafe_allow_html=True)
-    
-    if st.button("🚀 Train Classification Model", type="primary", use_container_width=True):
-        with st.spinner("Training model and generating results..."):
-            try:
-                # Define feature columns (similar to your notebook)
-                feature_columns = [
-                    'Year', 'Gender', 'Infant Mortality Rate', 'Under 5 Mortality Rate',
-                    'Suicides Rate', 'Alcohol Abuse', 'Tobacco Prevalence', 
-                    '% Death Cardiovascular', 'Incidence of Malaria', 'Incidence of Tuberculosis',
-                    '% of Births Attended By Skilled Personal', 'Universal Heath Care Coverage',
-                    'Air Pollution Death Rate Total', 'GDP per Capita', '% Population $1.90 a day',
-                    'Doctors', 'Nurses and Midwifes', '% Population Aged 0-14', '% Population Aged 65+'
-                ]
-                
-                # Only use columns that exist in the dataframe
-                available_features = [col for col in feature_columns if col in df_model.columns]
-                
-                # Prepare data
-                X = df_model[available_features]
-                y = df_model['Health_Risk_Level']
-                
-                # Encode categorical variables
-                label_encoder = LabelEncoder()
-                if 'Gender' in X.columns:
-                    X = X.copy()
-                    X['Gender_encoded'] = label_encoder.fit_transform(X['Gender'])
-                    X = X.drop('Gender', axis=1)
-                
-                # Encode target
-                y_encoded = label_encoder.fit_transform(y)
-                st.session_state.label_encoder = label_encoder
-                
-                # Handle missing values
-                imputer = SimpleImputer(strategy='median')
-                X_imputed = imputer.fit_transform(X)
-                
-                # Scale features
-                scaler = StandardScaler()
-                X_scaled = scaler.fit_transform(X_imputed)
-                
-                # Split data
-                X_train, X_test, y_train, y_test, idx_train, idx_test = train_test_split(
-                    X_scaled, y_encoded, df_model.index, test_size=0.2, 
-                    random_state=42, stratify=y_encoded
-                )
-                
-                # Train Random Forest model
-                rf_classifier = RandomForestClassifier(
-                    n_estimators=100,
-                    max_depth=10,
-                    min_samples_split=5,
-                    min_samples_leaf=2,
-                    random_state=42,
-                    class_weight='balanced'
-                )
-                rf_classifier.fit(X_train, y_train)
-                
-                # Make predictions
-                y_pred = rf_classifier.predict(X_test)
-                y_test_labels = label_encoder.inverse_transform(y_test)
-                y_pred_labels = label_encoder.inverse_transform(y_pred)
-                
-                # Calculate metrics
-                accuracy = accuracy_score(y_test_labels, y_pred_labels)
-                report = classification_report(y_test_labels, y_pred_labels, output_dict=True)
-                
-                # Store results
-                st.session_state.results = {
-                    'y_test': y_test_labels,
-                    'y_pred': y_pred_labels,
-                    'accuracy': accuracy,
-                    'report': report,
-                    'class_names': label_encoder.classes_,
-                    'model': rf_classifier,
-                    'test_indices': idx_test
-                }
-                
-                st.success("✅ Model trained successfully! Showing results below...")
-                
-            except Exception as e:
-                st.error(f"❌ Error during model training: {str(e)}")
-    
-    # Display results if available
-    if 'results' in st.session_state and st.session_state.results is not None:
-        results = st.session_state.results
+    def preprocess_data(self):
+        """Preprocess the data"""
+        if self.df is None:
+            return False
         
-        # Create tabs for different visualizations
-        tab1, tab2, tab3, tab4 = st.tabs([
-            "📊 Performance Overview", 
-            "📈 Risk Distribution", 
-            "📋 Classification Report", 
-            "📉 Detailed Analysis"
-        ])
-        
-        with tab1:
-            st.markdown("<h3 class='section-header'>Model Performance Summary</h3>", unsafe_allow_html=True)
+        with st.spinner("Preprocessing data..."):
+            # Create a copy for processing
+            df_processed = self.df.copy()
             
-            # Performance metrics in columns
-            col1, col2, col3 = st.columns(3)
+            # Handle missing values
+            # Numerical columns
+            num_cols = df_processed.select_dtypes(include=np.number).columns
+            df_processed[num_cols] = df_processed[num_cols].fillna(df_processed[num_cols].median())
             
-            with col1:
-                st.markdown(f"""
-                <div class="metric-card">
-                    <div class="metric-title">Overall Accuracy</div>
-                    <div class="metric-value">{results['accuracy']:.1%}</div>
-                </div>
-                """, unsafe_allow_html=True)
+            # Categorical columns
+            cat_cols = df_processed.select_dtypes(exclude=np.number).columns
+            for col in cat_cols:
+                df_processed[col] = df_processed[col].fillna(df_processed[col].mode()[0])
             
-            with col2:
-                correct_predictions = (results['y_test'] == results['y_pred']).sum()
-                total_predictions = len(results['y_test'])
-                st.markdown(f"""
-                <div class="metric-card">
-                    <div class="metric-title">Correct Predictions</div>
-                    <div class="metric-value">{correct_predictions:,}/{total_predictions:,}</div>
-                </div>
-                """, unsafe_allow_html=True)
+            # Encode categorical variables
+            for col in cat_cols:
+                le = LabelEncoder()
+                df_processed[col] = le.fit_transform(df_processed[col])
+                self.label_encoders[col] = le
             
-            with col3:
-                st.markdown(f"""
-                <div class="metric-card">
-                    <div class="metric-title">Risk Categories</div>
-                    <div class="metric-value">{len(results['class_names'])}</div>
-                </div>
-                """, unsafe_allow_html=True)
+            # Create Health Risk Level from Life Expectancy
+            def risk_level(le):
+                if le < 60:
+                    return "High"
+                elif le < 70:
+                    return "Medium"
+                else:
+                    return "Low"
             
-            # Confusion Matrix
-            st.markdown("<h3 class='section-header'>Confusion Matrix</h3>", unsafe_allow_html=True)
+            df_processed["Health_Risk_Level"] = df_processed["Life Expectancy"].apply(risk_level)
             
-            fig, ax = plt.subplots(figsize=(8, 6))
-            cm = confusion_matrix(results['y_test'], results['y_pred'])
+            # Prepare features and target
+            X = df_processed.drop(["Life Expectancy", "Health_Risk_Level"], axis=1)
+            y = df_processed["Life Expectancy"]
             
-            # Create heatmap
-            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
-                       xticklabels=results['class_names'],
-                       yticklabels=results['class_names'],
-                       ax=ax)
-            ax.set_xlabel('Predicted Label', fontsize=12, fontweight='bold')
-            ax.set_ylabel('True Label', fontsize=12, fontweight='bold')
-            ax.set_title('Confusion Matrix', fontsize=14, fontweight='bold', pad=20)
-            
-            st.pyplot(fig)
-        
-        with tab2:
-            st.markdown("<h3 class='section-header'>Risk Level Distribution Analysis</h3>", unsafe_allow_html=True)
-            
-            # Calculate distribution
-            actual_counts = pd.Series(results['y_test']).value_counts()
-            predicted_counts = pd.Series(results['y_pred']).value_counts()
-            
-            # Ensure all classes are present
-            for cls in results['class_names']:
-                if cls not in actual_counts:
-                    actual_counts[cls] = 0
-                if cls not in predicted_counts:
-                    predicted_counts[cls] = 0
-            
-            # Sort by class order
-            actual_counts = actual_counts[results['class_names']]
-            predicted_counts = predicted_counts[results['class_names']]
-            
-            # Create side-by-side bar chart
-            col1, col2 = st.columns([2, 1])
-            
-            with col1:
-                fig, ax = plt.subplots(figsize=(10, 6))
-                
-                x = np.arange(len(results['class_names']))
-                width = 0.35
-                
-                bars1 = ax.bar(x - width/2, actual_counts.values, width, 
-                             label='Actual', color='#3498db', alpha=0.8, edgecolor='black', linewidth=1.5)
-                bars2 = ax.bar(x + width/2, predicted_counts.values, width, 
-                             label='Predicted', color='#2ecc71', alpha=0.8, edgecolor='black', linewidth=1.5)
-                
-                # Customize the chart
-                ax.set_xlabel('Risk Level', fontsize=12, fontweight='bold')
-                ax.set_ylabel('Number of Cases', fontsize=12, fontweight='bold')
-                ax.set_title('Actual vs Predicted Risk Distribution', fontsize=14, fontweight='bold', pad=20)
-                ax.set_xticks(x)
-                ax.set_xticklabels(results['class_names'], fontsize=11)
-                ax.legend(fontsize=11)
-                ax.grid(axis='y', alpha=0.3, linestyle='--')
-                
-                # Add value labels on bars
-                for bars in [bars1, bars2]:
-                    for bar in bars:
-                        height = bar.get_height()
-                        ax.annotate(f'{int(height)}',
-                                   xy=(bar.get_x() + bar.get_width() / 2, height),
-                                   xytext=(0, 3),  # 3 points vertical offset
-                                   textcoords="offset points",
-                                   ha='center', va='bottom',
-                                   fontsize=10, fontweight='bold')
-                
-                # Add percentage labels
-                for i, (actual, predicted) in enumerate(zip(actual_counts.values, predicted_counts.values)):
-                    actual_pct = (actual / len(results['y_test']) * 100)
-                    predicted_pct = (predicted / len(results['y_pred']) * 100)
-                    
-                    ax.text(i - width/2, actual + max(actual_counts.max(), predicted_counts.max())*0.02,
-                           f'{actual_pct:.1f}%', ha='center', va='bottom', fontsize=9, fontweight='bold')
-                    ax.text(i + width/2, predicted + max(actual_counts.max(), predicted_counts.max())*0.02,
-                           f'{predicted_pct:.1f}%', ha='center', va='bottom', fontsize=9, fontweight='bold')
-                
-                st.pyplot(fig)
-            
-            with col2:
-                # Display distribution table
-                st.markdown("#### 📊 Distribution Table")
-                dist_data = []
-                for risk in results['class_names']:
-                    actual_count = actual_counts[risk]
-                    predicted_count = predicted_counts[risk]
-                    actual_pct = (actual_count / len(results['y_test']) * 100)
-                    predicted_pct = (predicted_count / len(results['y_pred']) * 100)
-                    
-                    dist_data.append({
-                        'Risk Level': risk,
-                        'Actual': f"{actual_count} ({actual_pct:.1f}%)",
-                        'Predicted': f"{predicted_count} ({predicted_pct:.1f}%)"
-                    })
-                
-                dist_df = pd.DataFrame(dist_data)
-                st.dataframe(dist_df, use_container_width=True)
-                
-                # Calculate and display accuracy by class
-                st.markdown("#### 🎯 Accuracy by Risk Level")
-                accuracy_by_class = []
-                for risk in results['class_names']:
-                    mask = results['y_test'] == risk
-                    if mask.sum() > 0:
-                        class_accuracy = (results['y_test'][mask] == results['y_pred'][mask]).mean()
-                        accuracy_by_class.append({
-                            'Risk Level': risk,
-                            'Accuracy': f"{class_accuracy:.1%}"
-                        })
-                
-                accuracy_df = pd.DataFrame(accuracy_by_class)
-                st.dataframe(accuracy_df, use_container_width=True)
-        
-        with tab3:
-            st.markdown("<h3 class='section-header'>Detailed Classification Report</h3>", unsafe_allow_html=True)
-            
-            # Convert classification report to DataFrame
-            report_df = pd.DataFrame(results['report']).transpose()
-            
-            # Display the report with styling
-            st.dataframe(
-                report_df.style.format({
-                    'precision': '{:.2f}',
-                    'recall': '{:.2f}',
-                    'f1-score': '{:.2f}',
-                    'support': '{:.0f}'
-                }).background_gradient(subset=['precision', 'recall', 'f1-score'], cmap='YlOrRd'),
-                use_container_width=True
+            # Split the data
+            self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
+                X, y, test_size=0.2, random_state=42
             )
             
-            # Create visual representation of precision, recall, f1-score
-            st.markdown("<h3 class='section-header'>Performance Metrics Visualization</h3>", unsafe_allow_html=True)
+            # Scale features
+            self.X_train_scaled = self.scaler.fit_transform(self.X_train)
+            self.X_test_scaled = self.scaler.transform(self.X_test)
             
-            # Filter out 'accuracy', 'macro avg', 'weighted avg' for the bar chart
-            metrics_df = report_df.drop(['accuracy', 'macro avg', 'weighted avg'], errors='ignore')
+            self.df_processed = df_processed
             
-            if not metrics_df.empty:
-                fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-                metrics = ['precision', 'recall', 'f1-score']
-                colors = ['#3498db', '#2ecc71', '#e74c3c']
-                
-                for ax, metric, color in zip(axes, metrics, colors):
-                    if metric in metrics_df.columns:
-                        bars = ax.bar(metrics_df.index, metrics_df[metric], color=color, alpha=0.8, edgecolor='black')
-                        ax.set_title(f'{metric.title()} by Class', fontsize=12, fontweight='bold')
-                        ax.set_xlabel('Risk Level', fontsize=10)
-                        ax.set_ylabel(metric.title(), fontsize=10)
-                        ax.set_ylim([0, 1.1])
-                        ax.grid(axis='y', alpha=0.3)
-                        
-                        # Add value labels on bars
-                        for bar in bars:
-                            height = bar.get_height()
-                            ax.annotate(f'{height:.2f}',
-                                       xy=(bar.get_x() + bar.get_width() / 2, height),
-                                       xytext=(0, 3),
-                                       textcoords="offset points",
-                                       ha='center', va='bottom',
-                                       fontsize=9)
-                
-                plt.tight_layout()
-                st.pyplot(fig)
-        
-        with tab4:
-            st.markdown("<h3 class='section-header'>Detailed Analysis & Sample Predictions</h3>", unsafe_allow_html=True)
-            
-            # Sample predictions comparison
-            st.markdown("#### 🔍 Sample Predictions (15 Random Samples)")
-            
-            # Create comparison DataFrame
-            comparison_df = pd.DataFrame({
-                'Index': results['test_indices'],
-                'Actual_Risk': results['y_test'],
-                'Predicted_Risk': results['y_pred']
-            })
-            
-            # Take sample
-            sample_comparison = comparison_df.sample(min(15, len(comparison_df)), random_state=42)
-            sample_comparison['Match'] = sample_comparison['Actual_Risk'] == sample_comparison['Predicted_Risk']
-            
-            # Display each sample in a styled card
-            for idx, row in sample_comparison.iterrows():
-                match_symbol = "✅" if row['Match'] else "❌"
-                match_class = "success-badge" if row['Match'] else "error-badge"
-                
-                col1, col2, col3 = st.columns([1, 2, 1])
-                with col2:
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <div>
-                                <strong>Index {row['Index']}</strong><br>
-                                <span style="color: #4B5563; font-size: 0.9rem;">Actual: <strong style="color: #1E3A8A">{row['Actual_Risk']}</strong></span><br>
-                                <span style="color: #4B5563; font-size: 0.9rem;">Predicted: <strong style="color: #059669">{row['Predicted_Risk']}</strong></span>
-                            </div>
-                            <span class="{match_class}">{match_symbol}</span>
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-            
-            # Detailed error analysis
-            st.markdown("#### 📉 Error Analysis")
-            
-            # Calculate confusion summary
-            confusion_summary = {}
-            for actual in results['class_names']:
-                for predicted in results['class_names']:
-                    count = ((results['y_test'] == actual) & (results['y_pred'] == predicted)).sum()
-                    if count > 0 and actual != predicted:
-                        confusion_summary[f"{actual} → {predicted}"] = count
-            
-            if confusion_summary:
-                error_df = pd.DataFrame({
-                    'Misclassification': list(confusion_summary.keys()),
-                    'Count': list(confusion_summary.values())
-                }).sort_values('Count', ascending=False)
-                
-                col1, col2 = st.columns([2, 1])
-                
-                with col1:
-                    fig, ax = plt.subplots(figsize=(10, 6))
-                    bars = ax.barh(error_df['Misclassification'], error_df['Count'], color='#e74c3c', alpha=0.8)
-                    ax.set_xlabel('Number of Misclassifications', fontsize=11)
-                    ax.set_title('Top Misclassifications', fontsize=13, fontweight='bold')
-                    ax.invert_yaxis()  # Highest on top
-                    
-                    # Add value labels
-                    for bar in bars:
-                        width = bar.get_width()
-                        ax.text(width + 0.5, bar.get_y() + bar.get_height()/2,
-                               f'{int(width)}', va='center', fontsize=10, fontweight='bold')
-                    
-                    st.pyplot(fig)
-                
-                with col2:
-                    st.dataframe(error_df, use_container_width=True)
-            else:
-                st.success("🎉 No misclassifications found!")
+        st.success("Data preprocessing completed!")
+        return True
     
-    else:
-        # Instructions when no model is trained yet
-        st.markdown("""
-        <div class="info-box">
-            <h4>📋 Instructions:</h4>
-            <ol>
-                <li>Upload your health dataset using the sidebar</li>
-                <li>Click the "Train Classification Model" button above</li>
-                <li>View the results in the tabs below</li>
-            </ol>
-            <p>The model will classify health risk into three categories:</p>
-            <ul>
-                <li><strong>Low Risk:</strong> Life Expectancy ≥ 70</li>
-                <li><strong>Medium Risk:</strong> 55 ≤ Life Expectancy < 70</li>
-                <li><strong>High Risk:</strong> Life Expectancy < 55</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
+    def train_model(self):
+        """Train the Random Forest model"""
+        with st.spinner("Training model..."):
+            # Train Random Forest Regressor
+            self.model = RandomForestRegressor(
+                n_estimators=150,
+                max_depth=None,
+                min_samples_split=2,
+                min_samples_leaf=1,
+                random_state=42
+            )
+            
+            self.model.fit(self.X_train_scaled, self.y_train)
+            
+            # Make predictions
+            self.y_pred = self.model.predict(self.X_test_scaled)
+            
+            # Calculate metrics
+            self.mse = mean_squared_error(self.y_test, self.y_pred)
+            self.mae = mean_absolute_error(self.y_test, self.y_pred)
+            self.r2 = r2_score(self.y_test, self.y_pred)
+            
+            # Convert predictions to risk levels
+            def risk_level(le):
+                if le < 60:
+                    return "High"
+                elif le < 70:
+                    return "Medium"
+                else:
+                    return "Low"
+            
+            y_test_risk = self.y_test.apply(risk_level)
+            y_pred_risk = pd.Series(self.y_pred).apply(risk_level)
+            
+            # Generate classification report
+            self.class_report = classification_report(
+                y_test_risk, 
+                y_pred_risk, 
+                output_dict=True
+            )
+            
+            # Generate confusion matrix
+            self.conf_matrix = confusion_matrix(y_test_risk, y_pred_risk)
+            
+        st.success("Model training completed!")
+        return True
+    
+    def get_feature_importance(self, top_n=20):
+        """Get top N feature importances"""
+        feature_importance = pd.DataFrame({
+            'feature': self.X_train.columns,
+            'importance': self.model.feature_importances_
+        })
         
-        # Display sample visualization
-        st.markdown("<h3 class='section-header'>📊 Expected Output Visualizations</h3>", unsafe_allow_html=True)
+        feature_importance = feature_importance.sort_values(
+            'importance', ascending=False
+        ).head(top_n)
+        
+        return feature_importance
+
+def main():
+    # Title
+    st.markdown('<h1 class="main-header">🏥 Health Risk Prediction Dashboard</h1>', 
+                unsafe_allow_html=True)
+    
+    # Initialize predictor
+    if 'predictor' not in st.session_state:
+        st.session_state.predictor = HealthRiskPredictor()
+    
+    predictor = st.session_state.predictor
+    
+    # Sidebar
+    with st.sidebar:
+        st.image("🏥", width=100)
+        st.title("Navigation")
+        
+        menu = st.selectbox(
+            "Choose a section:",
+            ["📊 Data Overview", "🔍 Data Analysis", "🤖 Model Training", 
+             "📈 Results & Metrics", "🔮 Make Predictions"]
+        )
+        
+        st.divider()
+        
+        if st.button("🔄 Reset Session"):
+            st.session_state.clear()
+            st.rerun()
+    
+    # Main content based on menu selection
+    if menu == "📊 Data Overview":
+        show_data_overview(predictor)
+    
+    elif menu == "🔍 Data Analysis":
+        show_data_analysis(predictor)
+    
+    elif menu == "🤖 Model Training":
+        show_model_training(predictor)
+    
+    elif menu == "📈 Results & Metrics":
+        show_results_metrics(predictor)
+    
+    elif menu == "🔮 Make Predictions":
+        show_predictions(predictor)
+
+def show_data_overview(predictor):
+    st.header("📊 Data Overview")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("📁 Load Data", type="primary"):
+            if predictor.load_data():
+                st.rerun()
+    
+    with col2:
+        if st.button("🔄 Preprocess Data", type="secondary"):
+            if predictor.preprocess_data():
+                st.rerun()
+    
+    if predictor.df is not None:
+        st.subheader("Dataset Preview")
+        
+        # Show basic info
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total Rows", predictor.df.shape[0])
+        with col2:
+            st.metric("Total Columns", predictor.df.shape[1])
+        with col3:
+            missing_values = predictor.df.isnull().sum().sum()
+            st.metric("Missing Values", missing_values)
+        
+        # Data preview
+        st.dataframe(predictor.df.head(), use_container_width=True)
+        
+        # Data info
+        with st.expander("📋 Dataset Information"):
+            buffer = io.StringIO()
+            predictor.df.info(buf=buffer)
+            st.text(buffer.getvalue())
+        
+        # Missing values
+        with st.expander("⚠️ Missing Values Analysis"):
+            missing_df = pd.DataFrame({
+                'Column': predictor.df.columns,
+                'Missing_Values': predictor.df.isnull().sum(),
+                'Percentage': (predictor.df.isnull().sum() / len(predictor.df)) * 100
+            }).sort_values('Percentage', ascending=False)
+            
+            st.dataframe(missing_df[missing_df['Missing_Values'] > 0], 
+                        use_container_width=True)
+            
+            # Plot missing values
+            if len(missing_df[missing_df['Missing_Values'] > 0]) > 0:
+                fig = px.bar(
+                    missing_df[missing_df['Missing_Values'] > 0],
+                    x='Column',
+                    y='Percentage',
+                    title='Missing Values Percentage by Column',
+                    color='Percentage',
+                    color_continuous_scale='Reds'
+                )
+                fig.update_layout(xaxis_tickangle=-45)
+                st.plotly_chart(fig, use_container_width=True)
+
+def show_data_analysis(predictor):
+    st.header("🔍 Data Analysis")
+    
+    if predictor.df is None:
+        st.warning("Please load the data first from the Data Overview section.")
+        return
+    
+    # Life Expectancy Distribution
+    st.subheader("Life Expectancy Distribution")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Histogram
+        fig = px.histogram(
+            predictor.df,
+            x='Life Expectancy',
+            nbins=50,
+            title='Distribution of Life Expectancy',
+            color_discrete_sequence=['#1f77b4']
+        )
+        fig.update_layout(
+            xaxis_title='Life Expectancy',
+            yaxis_title='Count'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        # Box plot
+        fig = px.box(
+            predictor.df,
+            y='Life Expectancy',
+            title='Box Plot of Life Expectancy',
+            color_discrete_sequence=['#ff7f0e']
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # Correlation analysis
+    st.subheader("Correlation Analysis")
+    
+    # Select numerical columns for correlation
+    num_cols = predictor.df.select_dtypes(include=[np.number]).columns
+    
+    # Get top 15 features correlated with Life Expectancy
+    if 'Life Expectancy' in num_cols:
+        corr_with_target = predictor.df[num_cols].corr()['Life Expectancy'].abs().sort_values(ascending=False)
+        top_corr_features = corr_with_target.index[1:16]  # Exclude Life Expectancy itself
+        
+        # Create correlation matrix for top features
+        corr_matrix = predictor.df[top_corr_features.tolist() + ['Life Expectancy']].corr()
+        
+        # Plot heatmap
+        fig = px.imshow(
+            corr_matrix,
+            title='Correlation Heatmap (Top 15 features with Life Expectancy)',
+            color_continuous_scale='RdBu',
+            zmin=-1,
+            zmax=1
+        )
+        fig.update_layout(width=800, height=600)
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # Risk level distribution (after preprocessing)
+    if hasattr(predictor, 'df_processed'):
+        st.subheader("Health Risk Level Distribution")
+        
+        risk_counts = predictor.df_processed['Health_Risk_Level'].value_counts()
         
         col1, col2 = st.columns(2)
         
         with col1:
-            st.image("https://via.placeholder.com/600x400/3498db/ffffff?text=Risk+Distribution+Chart", 
-                    caption="Risk Distribution Bar Chart")
+            fig = px.pie(
+                names=risk_counts.index,
+                values=risk_counts.values,
+                title='Health Risk Level Distribution',
+                color_discrete_sequence=px.colors.qualitative.Set3
+            )
+            st.plotly_chart(fig, use_container_width=True)
         
         with col2:
-            st.image("https://via.placeholder.com/600x400/2ecc71/ffffff?text=Confusion+Matrix", 
-                    caption="Confusion Matrix Heatmap")
+            fig = px.bar(
+                x=risk_counts.index,
+                y=risk_counts.values,
+                title='Health Risk Level Counts',
+                color=risk_counts.index,
+                color_discrete_sequence=px.colors.qualitative.Set3
+            )
+            fig.update_layout(
+                xaxis_title='Risk Level',
+                yaxis_title='Count'
+            )
+            st.plotly_chart(fig, use_container_width=True)
 
-else:
-    # Welcome screen when no data is uploaded
-    st.markdown("""
-    <div style="text-align: center; padding: 4rem 2rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 15px; color: white;">
-        <h2 style="font-size: 2.5rem; margin-bottom: 1rem;">Welcome to Health Risk Classification Dashboard</h2>
-        <p style="font-size: 1.2rem; margin-bottom: 2rem;">Upload your health dataset to analyze and predict health risk levels</p>
-        
-        <div style="display: flex; justify-content: center; gap: 2rem; margin-top: 3rem;">
-            <div style="text-align: center;">
-                <div style="font-size: 3rem;">📊</div>
-                <h3>Data Analysis</h3>
-                <p>Upload and explore your health data</p>
-            </div>
-            <div style="text-align: center;">
-                <div style="font-size: 3rem;">🤖</div>
-                <h3>Model Training</h3>
-                <p>Train Random Forest classifier</p>
-            </div>
-            <div style="text-align: center;">
-                <div style="font-size: 3rem;">📈</div>
-                <h3>Visualizations</h3>
-                <p>View comprehensive charts and graphs</p>
-            </div>
-            <div style="text-align: center;">
-                <div style="font-size: 3rem;">📋</div>
-                <h3>Reports</h3>
-                <p>Detailed classification reports</p>
-            </div>
-        </div>
-    </div>
+def show_model_training(predictor):
+    st.header("🤖 Model Training")
     
-    <div style="margin-top: 3rem;">
-        <h3>🚀 Get Started:</h3>
-        <ol>
-            <li>Use the sidebar on the left to upload your CSV dataset</li>
-            <li>Ensure your dataset includes a 'Life Expectancy' column</li>
-            <li>Click the 'Train Classification Model' button</li>
-            <li>Explore the results through interactive visualizations</li>
-        </ol>
-    </div>
-    """, unsafe_allow_html=True)
+    if predictor.df is None:
+        st.warning("Please load and preprocess the data first.")
+        return
+    
+    if not hasattr(predictor, 'df_processed'):
+        st.warning("Please preprocess the data first from the Data Overview section.")
+        return
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        n_estimators = st.slider(
+            "Number of Trees",
+            min_value=50,
+            max_value=500,
+            value=150,
+            step=50,
+            help="Number of trees in the Random Forest"
+        )
+    
+    with col2:
+        max_depth = st.selectbox(
+            "Max Depth",
+            options=[None, 10, 20, 30, 50],
+            index=0,
+            help="Maximum depth of the tree"
+        )
+    
+    with col3:
+        min_samples_split = st.slider(
+            "Min Samples Split",
+            min_value=2,
+            max_value=10,
+            value=2,
+            help="Minimum number of samples required to split an internal node"
+        )
+    
+    if st.button("🚀 Train Model", type="primary"):
+        with st.spinner("Training model..."):
+            # Update model parameters
+            predictor.model = RandomForestRegressor(
+                n_estimators=n_estimators,
+                max_depth=max_depth,
+                min_samples_split=min_samples_split,
+                min_samples_leaf=1,
+                random_state=42
+            )
+            
+            predictor.model.fit(predictor.X_train_scaled, predictor.y_train)
+            
+            # Make predictions
+            predictor.y_pred = predictor.model.predict(predictor.X_test_scaled)
+            
+            # Calculate metrics
+            predictor.mse = mean_squared_error(predictor.y_test, predictor.y_pred)
+            predictor.mae = mean_absolute_error(predictor.y_test, predictor.y_pred)
+            predictor.r2 = r2_score(predictor.y_test, predictor.y_pred)
+            
+            # Convert predictions to risk levels
+            def risk_level(le):
+                if le < 60:
+                    return "High"
+                elif le < 70:
+                    return "Medium"
+                else:
+                    return "Low"
+            
+            y_test_risk = predictor.y_test.apply(risk_level)
+            y_pred_risk = pd.Series(predictor.y_pred).apply(risk_level)
+            
+            # Generate classification report
+            predictor.class_report = classification_report(
+                y_test_risk, 
+                y_pred_risk, 
+                output_dict=True
+            )
+            
+            # Generate confusion matrix
+            predictor.conf_matrix = confusion_matrix(y_test_risk, y_pred_risk)
+            
+            st.success("Model trained successfully!")
+            st.balloons()
+    
+    # Show model information if trained
+    if hasattr(predictor, 'model') and predictor.model is not None:
+        st.subheader("Model Information")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric("Model Type", "Random Forest Regressor")
+        
+        with col2:
+            st.metric("Number of Trees", predictor.model.n_estimators)
+        
+        with col3:
+            st.metric("Features Used", predictor.X_train.shape[1])
+        
+        # Feature Importance
+        st.subheader("Feature Importance")
+        
+        feature_importance = predictor.get_feature_importance(top_n=15)
+        
+        fig = px.bar(
+            feature_importance,
+            x='importance',
+            y='feature',
+            orientation='h',
+            title='Top 15 Feature Importances',
+            color='importance',
+            color_continuous_scale='Viridis'
+        )
+        fig.update_layout(
+            yaxis={'categoryorder': 'total ascending'},
+            xaxis_title='Importance',
+            yaxis_title='Feature'
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
-# Footer
-st.markdown("---")
-st.markdown("""
-<div style="text-align: center; color: #6B7280; font-size: 0.9rem; padding: 1rem;">
-    <p style="margin-bottom: 0.5rem;">🏥 <strong>Health Risk Classification Dashboard</strong> • Powered by Streamlit & Scikit-learn</p>
-    <p style="font-size: 0.8rem;">Classify health risk levels based on life expectancy and various health indicators</p>
-</div>
-""", unsafe_allow_html=True)
+def show_results_metrics(predictor):
+    st.header("📈 Results & Metrics")
+    
+    if not hasattr(predictor, 'model') or predictor.model is None:
+        st.warning("Please train the model first from the Model Training section.")
+        return
+    
+    # Regression Metrics
+    st.subheader("Regression Performance Metrics")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("Mean Squared Error", f"{predictor.mse:.4f}")
+    
+    with col2:
+        st.metric("Mean Absolute Error", f"{predictor.mae:.4f}")
+    
+    with col3:
+        st.metric("R² Score", f"{predictor.r2:.4f}")
+    
+    with col4:
+        rmse = np.sqrt(predictor.mse)
+        st.metric("Root MSE", f"{rmse:.4f}")
+    
+    # Actual vs Predicted Plot
+    st.subheader("Actual vs Predicted Life Expectancy")
+    
+    fig = go.Figure()
+    
+    fig.add_trace(go.Scatter(
+        x=predictor.y_test,
+        y=predictor.y_pred,
+        mode='markers',
+        name='Predictions',
+        marker=dict(color='blue', opacity=0.6)
+    ))
+    
+    # Add perfect prediction line
+    min_val = min(predictor.y_test.min(), predictor.y_pred.min())
+    max_val = max(predictor.y_test.max(), predictor.y_pred.max())
+    
+    fig.add_trace(go.Scatter(
+        x=[min_val, max_val],
+        y=[min_val, max_val],
+        mode='lines',
+        name='Perfect Prediction',
+        line=dict(color='red', dash='dash')
+    ))
+    
+    fig.update_layout(
+        title='Actual vs Predicted Values',
+        xaxis_title='Actual Life Expectancy',
+        yaxis_title='Predicted Life Expectancy',
+        showlegend=True
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Classification Report
+    st.subheader("Classification Report (Risk Levels)")
+    
+    if hasattr(predictor, 'class_report'):
+        # Convert classification report to DataFrame for display
+        class_report_df = pd.DataFrame(predictor.class_report).transpose()
+        
+        # Display as a styled table
+        st.dataframe(
+            class_report_df.style.format({
+                'precision': '{:.2f}',
+                'recall': '{:.2f}',
+                'f1-score': '{:.2f}',
+                'support': '{:.0f}'
+            }).background_gradient(cmap='Blues', subset=['precision', 'recall', 'f1-score']),
+            use_container_width=True
+        )
+    
+    # Confusion Matrix
+    st.subheader("Confusion Matrix")
+    
+    if hasattr(predictor, 'conf_matrix'):
+        # Get class labels (assuming they're in order)
+        classes = ['High', 'Low', 'Medium']  # Based on your classification report
+        
+        # Create heatmap
+        fig = px.imshow(
+            predictor.conf_matrix,
+            text_auto=True,
+            color_continuous_scale='Blues',
+            labels=dict(x="Predicted", y="Actual", color="Count"),
+            x=classes,
+            y=classes,
+            title="Confusion Matrix"
+        )
+        
+        fig.update_layout(
+            xaxis_title='Predicted Label',
+            yaxis_title='True Label'
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # Residual Analysis
+    st.subheader("Residual Analysis")
+    
+    residuals = predictor.y_test - predictor.y_pred
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Residuals distribution
+        fig = px.histogram(
+            residuals,
+            nbins=50,
+            title='Distribution of Residuals',
+            color_discrete_sequence=['#ff7f0e']
+        )
+        fig.update_layout(
+            xaxis_title='Residuals',
+            yaxis_title='Count'
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        # Residuals vs Predicted
+        fig = go.Figure()
+        
+        fig.add_trace(go.Scatter(
+            x=predictor.y_pred,
+            y=residuals,
+            mode='markers',
+            name='Residuals',
+            marker=dict(color='green', opacity=0.6)
+        ))
+        
+        # Add zero line
+        fig.add_hline(y=0, line_dash="dash", line_color="red")
+        
+        fig.update_layout(
+            title='Residuals vs Predicted Values',
+            xaxis_title='Predicted Life Expectancy',
+            yaxis_title='Residuals'
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # Error metrics by risk level
+    st.subheader("Error Analysis by Risk Level")
+    
+    def risk_level(le):
+        if le < 60:
+            return "High"
+        elif le < 70:
+            return "Medium"
+        else:
+            return "Low"
+    
+    y_test_risk = predictor.y_test.apply(risk_level)
+    errors = abs(predictor.y_test - predictor.y_pred)
+    
+    error_by_risk = pd.DataFrame({
+        'Actual Risk': y_test_risk,
+        'Error': errors
+    })
+    
+    fig = px.box(
+        error_by_risk,
+        x='Actual Risk',
+        y='Error',
+        color='Actual Risk',
+        title='Prediction Error Distribution by Risk Level',
+        color_discrete_sequence=px.colors.qualitative.Set3
+    )
+    
+    fig.update_layout(
+        xaxis_title='Actual Risk Level',
+        yaxis_title='Absolute Error'
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
+
+def show_predictions(predictor):
+    st.header("🔮 Make Predictions")
+    
+    if not hasattr(predictor, 'model') or predictor.model is None:
+        st.warning("Please train the model first from the Model Training section.")
+        return
+    
+    st.subheader("Enter Feature Values for Prediction")
+    
+    # Create input fields for top important features
+    if hasattr(predictor, 'X_train'):
+        # Get top 10 important features
+        important_features = predictor.get_feature_importance(top_n=10)
+        top_features = important_features['feature'].tolist()
+        
+        # Create input form
+        input_data = {}
+        
+        cols = st.columns(2)
+        
+        for idx, feature in enumerate(top_features):
+            with cols[idx % 2]:
+                # Get min and max from training data for reference
+                min_val = float(predictor.X_train[feature].min())
+                max_val = float(predictor.X_train[feature].max())
+                mean_val = float(predictor.X_train[feature].mean())
+                
+                input_data[feature] = st.number_input(
+                    label=f"{feature}",
+                    min_value=min_val,
+                    max_value=max_val,
+                    value=mean_val,
+                    step=(max_val - min_val) / 100,
+                    help=f"Range: {min_val:.2f} to {max_val:.2f}"
+                )
+        
+        # Fill remaining features with their means
+        for feature in predictor.X_train.columns:
+            if feature not in input_data:
+                input_data[feature] = float(predictor.X_train[feature].mean())
+        
+        # Create prediction button
+        if st.button("🎯 Predict Life Expectancy", type="primary"):
+            # Convert input to DataFrame
+            input_df = pd.DataFrame([input_data])
+            
+            # Ensure correct column order
+            input_df = input_df[predictor.X_train.columns]
+            
+            # Scale the input
+            input_scaled = predictor.scaler.transform(input_df)
+            
+            # Make prediction
+            prediction = predictor.model.predict(input_scaled)[0]
+            
+            # Determine risk level
+            if prediction < 60:
+                risk = "High"
+                risk_color = "red"
+            elif prediction < 70:
+                risk = "Medium"
+                risk_color = "orange"
+            else:
+                risk = "Low"
+                risk_color = "green"
+            
+            # Display results
+            st.markdown("---")
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown(f"""
+                <div class="metric-card">
+                    <h3>Predicted Life Expectancy</h3>
+                    <h2 style="color: #1f77b4; font-size: 2.5rem;">{prediction:.2f} years</h2>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col2:
+                st.markdown(f"""
+                <div class="metric-card">
+                    <h3>Health Risk Level</h3>
+                    <h2 style="color: {risk_color}; font-size: 2.5rem;">{risk}</h2>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            # Show feature importance for this prediction
+            st.subheader("Feature Contribution to This Prediction")
+            
+            # Get feature importances
+            feature_importance = predictor.get_feature_importance(top_n=10)
+            
+            # Display as horizontal bar chart
+            fig = px.bar(
+                feature_importance,
+                x='importance',
+                y='feature',
+                orientation='h',
+                title='Feature Importance (Global)',
+                color='importance',
+                color_continuous_scale='Viridis'
+            )
+            fig.update_layout(
+                yaxis={'categoryorder': 'total ascending'},
+                xaxis_title='Importance',
+                yaxis_title='Feature',
+                height=400
