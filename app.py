@@ -792,4 +792,4 @@ def show_predictions(predictor):
                 yaxis={'categoryorder': 'total ascending'},
                 xaxis_title='Importance',
                 yaxis_title='Feature',
-                height=400
+                height=400)
